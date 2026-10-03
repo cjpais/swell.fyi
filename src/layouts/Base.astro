@@ -3,12 +3,14 @@ import "uplot/dist/uPlot.min.css";
 import "../styles/global.css";
 import { readMeta } from "../lib/local";
 
-interface Props { title: string; description?: string }
-const { title, description = "Taiwan buoy observations, CWA forecasts and open wave models, side by side." } = Astro.props;
+interface Props { title: string; description?: string; full?: boolean }
+// `full`: the page fills the window under the masthead (explore map); no footer, no wrap.
+const { title, description = "Taiwan buoy observations, CWA forecasts and open wave models, side by side.", full = false } = Astro.props;
 const meta = readMeta();
 const path = Astro.url.pathname;
 const nav = [
   ["/", "Now"],
+  ["/explore/", "Map"],
   ["/buoys/", "Buoys"],
   ["/research/", "Data sources"],
 ];
@@ -28,7 +30,7 @@ const nav = [
     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&family=Noto+Serif+TC:wght@400;700;900&display=swap" rel="stylesheet" />
     <title>{title === "Taiwan Waves" ? title : `${title} · Taiwan Waves`}</title>
   </head>
-  <body>
+  <body class={full ? "full" : undefined}>
     <header class="site">
       <div class="wrap bar">
         <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span class="brand-zh" lang="zh-Hant">台灣浪況</span><span class="brand-en">Taiwan Waves</span></a>
@@ -42,17 +44,17 @@ const nav = [
         </p>
       </div>
     </header>
-    <main class="wrap">
+    <main class={full ? "full-main" : "wrap"}>
       <slot />
     </main>
-    <footer class="wrap site-foot">
+    {!full && <footer class="wrap site-foot">
       <p>
         Observations, tide and recreation forecasts: Central Weather Administration (中央氣象署) open data, under Taiwan's Open Government Data License.
         Model forecasts: <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0), which redistributes Météo-France MFWAM, NOAA GFS-Wave, ECMWF WAM and ECMWF IFS wind.
         Map: <a href="https://protomaps.com">Protomaps</a>, © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors; bathymetry from NOAA ETOPO 2022.
         Times are Taiwan time (UTC+8).
       </p>
-    </footer>
+    </footer>}
     <script>
       import { relTime } from "../lib/format";
       const el = document.getElementById("freshness");

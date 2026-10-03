@@ -1,0 +1,74 @@
+---
+// Explore: the whole coast as one map. Pick a spot and the map closes in on it, a compass
+// opens around it, and the panel and the forecast bar follow it. The last spot you opened
+// is remembered in the browser.
+import Base from "../../layouts/Base.astro";
+import { readStations, nearestTide, isWaveStation } from "../../lib/local";
+import { SPOTS, REGIONS } from "../../data/spots";
+import { cleanName } from "../../lib/surf";
+
+const stations = readStations();
+
+const spots = SPOTS.map((s) => {
+  const tide = nearestTide(s.lat, s.lon);
+  return {
+    id: s.id, name: s.name, nameZh: s.nameZh, region: s.region, lat: s.lat, lon: s.lon, faces: s.faces,
+    tide: tide ? { name: tide.name, events: tide.events } : null,
+  };
+});
+const buoys = stations.filter(isWaveStation).map((s) => ({ id: s.id, name: cleanName(s.nameEn), lat: s.lat, lon: s.lon, hs: s.latest?.values.wave_height_m ?? null, time: s.latest?.time ?? null }));
+const short = (n: string) => n.replace(/ \(.*\)$/, "");
+---
+<Base title="Map" description="Taiwan's surf spots, swell, wind and tide on one map." full>
+  <div class="ex" id="ex">
+    <div class="ex-stage">
+      <div id="map" class="ex-map" aria-label="Map of Taiwan's surf spots"></div>
+
+      <!-- Top left: every spot, or the numbers for the open one. -->
+      <aside class="ex-card" id="card" aria-live="polite">
+        <div class="ec-pick" id="pick">
+          <p class="ec-kicker">Surf spots <span class="faint">· wave height and wind</span></p>
+          {REGIONS.map((r) => (
+            <section class="ec-region">
+              <h3>{r}</h3>
+              <ul>
+                {spots.filter((s) => s.region === r).map((s) => (
+                  <li><a class="ec-row" href={`#${s.id}`} data-pick={s.id}>
+                    <span class="nm"><span class="en">{short(s.name)}</span> <span class="zh" lang="zh-Hant">{s.nameZh}</span></span>
+                    <span class="wd" data-wind></span>
+                    <span class="hs" data-hs>–</span>
+                  </a></li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+
+        <div class="ec-spot" id="spot" hidden>
+          <div class="ec-head">
+            <h1 class="ec-name"><span class="zh" lang="zh-Hant" data-k="zh"></span> <span class="en" data-k="en"></span></h1>
+            <button class="ec-close" id="close" type="button" aria-label="Back to all spots">×</button>
+          </div>
+          <p class="ec-when"><b data-k="kind">Right now</b> <span data-k="when"></span></p>
+          <div class="ec-top">
+            <div class="ec-fig"><p class="ec-big"><span class="ec-hs" data-k="hs">–</span><span class="ec-unit">m</span></p><p class="ec-cap">Waves</p></div>
+            <div class="ec-fig"><p class="ec-big"><span class="ec-hs ec-wind" data-k="ws">–</span><span class="ec-unit">m/s</span></p><p class="ec-cap" data-k="wdir">Wind</p></div>
+          </div>
+          <a class="ec-more" data-k="more" href="#">Full forecast and every source</a>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Bottom, full width: waves, wind and tide on one time axis. Hover to preview, click to set. -->
+    <section class="ex-bar" aria-label="Forecast">
+      <div class="eb-strip" id="strip"></div>
+      <button class="btn eb-now" id="now" type="button">Back to now</button>
+    </section>
+  </div>
+
+  <script type="application/json" id="explore-data" set:html={JSON.stringify({ spots, buoys })} />
+  <script>
+    import { initExplore } from "../../lib/explore-page";
+    initExplore(document.getElementById("ex")!, JSON.parse(document.getElementById("explore-data")!.textContent!));
+  </script>
+</Base>

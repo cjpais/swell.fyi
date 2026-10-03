@@ -35,7 +35,7 @@ export async function fetchSST(lat: number, lon: number): Promise<Hourly> {
   return j.hourly;
 }
 
-export type Wind = Hourly & { url: string; lat: number; lon: number; sun: [number, number][] };
+export type Wind = Hourly & { url: string; lat: number; lon: number; sun: [number, number][]; wind_speed_10m: Series; wind_direction_10m: Series; wind_gusts_10m: Series };
 /** Hourly 10 m wind (ECMWF IFS) plus sunrise/sunset. */
 export async function fetchSpotWind(lat: number, lon: number, { past = 1, days = 7 } = {}): Promise<Wind> {
   const url = `https://api.open-meteo.com/v1/forecast?${qs({ latitude: lat.toFixed(4), longitude: lon.toFixed(4), hourly: "wind_speed_10m,wind_direction_10m,wind_gusts_10m", daily: "sunrise,sunset", models: "ecmwf_ifs025", past_days: past, forecast_days: days, wind_speed_unit: "ms", timeformat: "unixtime", timezone: "GMT" })}`;
