@@ -1,0 +1,39 @@
+{
+  "name": "taiwan-waves",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "fetch": "bun scripts/fetch-cwa.ts",
+    "fetch:backfill": "bun scripts/fetch-cwa.ts --backfill",
+    "backfill:history": "bun scripts/backfill-ocean.ts && bun scripts/fetch-cwa.ts",
+    "tiles": "bash scripts/tiles.sh",
+    "bathymetry": "uv run scripts/bathymetry.py",
+    "tiles:upload": "bash scripts/tiles-upload.sh",
+    "deploy:tiles": "wrangler deploy -c workers/tiles/wrangler.jsonc"
+  },
+  "dependencies": {
+    "@protomaps/basemaps": "^5.7.2",
+    "astro": "^7.3.5",
+    "fast-xml-parser": "^5.11.2",
+    "fflate": "^0.8.3",
+    "maplibre-gl": "^6.11.2",
+    "pmtiles": "^4.5.0",
+    "uplot": "^1.6.32"
+  },
+  "allowScripts": {
+    "esbuild": true
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261003.1",
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.147.0"
+  }
+}

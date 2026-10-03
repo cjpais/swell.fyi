@@ -1,0 +1,140 @@
+---
+import Base from "../../layouts/Base.astro";
+import { SPOTS, type Spot } from "../../data/spots";
+import { readStations, readRecreation, nearestTide } from "../../lib/local";
+import { km } from "../../lib/openmeteo";
+import { readoutShell, swIcon, windIcon, glyphKey } from "../../lib/ui";
+import { cleanName, compassWord, facesDeg } from "../../lib/surf";
+
+export function getStaticPaths() {
+  return SPOTS.map((spot) => ({ params: { id: spot.id }, props: { spot } }));
+}
+
+const { spot } = Astro.props as { spot: Spot };
+const stations = readStations();
+const rec = readRecreation();
+const point = rec?.points[spot.cwaPoint] ?? null;
+const buoys = spot.buoys
+  .map((id) => stations.find((s) => s.id === id))
+  .filter((s) => s != null)
+  .map((s) => ({
+    id: s.id,
+    name: cleanName(s.nameEn),
+    zh: s.name,
+    lat: s.lat,
+    lon: s.lon,
+    km: km(spot.lat, spot.lon, s.lat, s.lon),
+    hs: s.latest?.values.wave_height_m ?? null,
+    time: s.latest?.time ?? null,
+    hasWaves: s.latest?.values.wave_height_m != null && Date.now() - Date.parse(s.latest.time) < 12 * 36e5,
+  }));
+const buoy = buoys.find((b) => b.hasWaves) ?? null;
+const others = buoys.filter((b) => b.id !== buoy?.id);
+const tide = nearestTide(spot.lat, spot.lon);
+
+const payload = {
+  spot,
+  cwa: point ? { code: spot.cwaPoint, name: point.name, lat: point.lat, lon: point.lon, issued: rec!.issued, rows: point.rows } : null,
+  buoy,
+  tide: tide ? { name: tide.name, events: tide.events } : null,
+};
+---
+<Base title={spot.name} description={`Wave forecast and buoy data for ${spot.name} (${spot.nameZh}), Taiwan.`}>
+  <p class="crumb"><a href="/">Now</a> / {spot.region}</p>
+  <section class="detail-head">
+    <h1 class="headline"><span class="en">{spot.name}</span> <span class="zh" lang="zh-Hant">{spot.nameZh}</span></h1>
+    <p class="facts">
+      The beach faces {compassWord(facesDeg(spot.faces))}.
+      {buoy && <> Nearest working buoy: <a href={`/buoys/${buoy.id}/`}>{buoy.name}</a>, {buoy.km.toFixed(0)} km away.</>}
+      {others.length > 0 && <> Also nearby: {others.map((b, i) => <>{i > 0 && ", "}<a href={`/buoys/${b.id}/`}>{b.name}</a></>)}.</>}
+      {spot.notes && <> {spot.notes}</>}
+    </p>
+  </section>
+
+  <section class="detail-now">
+    <div class="readout" id="readout" set:html={readoutShell({
+      rows: [["sw1", swIcon("p1"), "Swell"], ["sw2", swIcon("p2"), "2nd swell"], ["wind", windIcon, "Wind"], ["tide", "", "Tide"], ["water", "", "Water"]],
+    })} />
+    <figure class="rose-frame">
+      <div class="rose" id="rose"></div>
+      <figcaption><Fragment set:html={glyphKey} /><span>Shaded: directions swell can reach this beach from.</span></figcaption>
+    </figure>
+    <figure class="map-frame detail-map"><div id="map" class="map" aria-label={`Map of ${spot.name} with swell and wind`}></div></figure>
+  </section>
+
+  <section class="detail-timeline">
+    <div class="panel-head"><h2>Next six days</h2><p class="note">Hover or tap to scrub; the readout, compass and map follow. Arrow keys step by the hour.</p></div>
+    <div class="legend-row" id="legend"></div>
+    <div class="timeline-scroll"><div id="timeline" class="timeline"></div></div>
+  </section>
+
+  <section class="detail-sources" id="sources">
+    <h2>Forecast or measured?</h2>
+    <div class="explain">
+      <p><strong>Forecast</strong> numbers come from Météo-France's MFWAM wave model, via Open-Meteo, at a point a few km offshore of the beach. The model splits the sea into separate swell trains, each with its own height, period and direction, which is where the swell rows and arrows come from. It describes open water, so it doesn't know about reefs, sandbars or headlands, and it often reads high.</p>
+      <p><strong>Measured</strong> numbers come from a CWA buoy, every hour. A buoy reports one total height, a mean period and one direction. It can't split the sea into swells, and it may be 20 km or more away, or tucked inshore. When the two disagree, the buoy is the truth about the water near it; the model is the better guide to what's coming.</p>
+    </div>
+    <div class="scroll" id="source-table"><p class="note">Loading sources…</p></div>
+  </section>
+
+  <section class="compare">
+    <h2>Every source, side by side</h2>
+    <p class="note">
+      The buoy, CWA's own forecast and three global wave models on the same axes, so you can see where they agree.
+      Model grid cells: <span id="grid-cell">loading…</span>
+    </p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Time window" id="range">
+        <button class="btn" data-range="past" aria-pressed="false">Past 3 days</button>
+        <button class="btn" data-range="3d" aria-pressed="true">Next 3 days</button>
+        <button class="btn" data-range="10d" aria-pressed="false">Next 10 days</button>
+      </div>
+      <button class="btn" id="dl">Download all series (CSV)</button>
+    </div>
+
+    <section class="panel">
+      <h2>Wave height</h2>
+      <p class="src">Significant wave height, total sea. Buoy observed (CWA O-B0075), CWA's WW3-based forecast (M-B0078-001, 3-hourly) and three global models via Open-Meteo. The buoy is offshore, not at the beach.</p>
+      <div class="plot loading" id="c-hs"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Swell breakdown</h2>
+        <div class="seg" role="group" aria-label="Model" id="part-model">
+          <button class="btn" data-model="meteofrance_wave" aria-pressed="true">MFWAM</button>
+          <button class="btn" data-model="ncep_gfswave016" aria-pressed="false">GFS-Wave</button>
+        </div>
+      </div>
+      <p class="src">The total sea split into primary swell, secondary swell and local wind waves. Only these two models publish partitions through Open-Meteo; CWA's open data and ECMWF's do not.</p>
+      <div class="plot loading" id="c-part-h"></div>
+      <div class="plot loading" id="c-part-t"></div>
+      <div class="plot loading" id="c-part-d"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Wave period</h2>
+      <p class="src">Mean wave period for every source (CWA's buoy period appears to be mean, not peak). Long-period swell shows up in the swell breakdown before it moves this number much.</p>
+      <div class="plot loading" id="c-tp"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Wave direction</h2>
+      <p class="src">Direction waves come from. CWA's forecast gives 16-point compass text, so it steps in 22.5° increments.</p>
+      <div class="plot loading" id="c-dir"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Wind at the spot</h2>
+      <p class="src">10 m wind from the ECMWF IFS and GFS weather models via Open-Meteo, plus the reference buoy's anemometer.</p>
+      <div class="plot loading" id="c-wind"></div>
+      <div class="plot loading" id="c-wdir"></div>
+    </section>
+  </section>
+
+  <script type="application/json" id="spot-data" set:html={JSON.stringify(payload)} />
+  <script>
+    import { initSpot } from "../../lib/spot-page";
+    initSpot(JSON.parse(document.getElementById("spot-data")!.textContent!));
+  </script>
+</Base>

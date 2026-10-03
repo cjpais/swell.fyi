@@ -1,0 +1,77 @@
+---
+import Base from "../../layouts/Base.astro";
+import { readStations, isWaveStation } from "../../lib/local";
+import { fmt, compass } from "../../lib/format";
+import { arrowSvg } from "../../lib/glyphs";
+import { cleanName } from "../../lib/surf";
+
+const stations = readStations();
+const wave = stations.filter(isWaveStation).sort((a, b) => b.lat - a.lat);
+const other = stations.filter((s) => !isWaveStation(s)).sort((a, b) => b.lat - a.lat);
+const age = (t?: string) => (t ? Math.round((Date.now() - Date.parse(t)) / 36e5) : null);
+---
+<Base title="Buoys">
+  <section class="detail-head">
+    <h1 class="headline small" style="margin-top: 28px"><span class="en">CWA marine stations</span> <span class="zh" lang="zh-Hant">浮標</span></h1>
+    <p class="facts">
+      Every station in CWA's marine observation feed (O-B0075-001), north to south. Most are run by CWA; others by the Water Resources Agency,
+      the National Academy of Marine Research (OAC) or National Taiwan University, and CWA republishes them. Each station page has the archived history and a CSV download.
+    </p>
+  </section>
+
+  <section class="buoys-panel" style="margin-top: 36px">
+    <h2>Wave stations ({wave.length})</h2>
+    <div class="scroll">
+      <table class="data">
+        <thead>
+          <tr><th>Station</th><th>ID</th><th>County</th><th class="n">Wave height</th><th class="n">Period</th><th>From</th><th class="n">Wind</th><th class="n">Water</th><th>Reading</th><th>Archive since</th></tr>
+        </thead>
+        <tbody>
+          {wave.map((s) => {
+            const v = s.latest?.values ?? {};
+            const a = age(s.latest?.time);
+            return (
+              <tr>
+                <td><a href={`/buoys/${s.id}/`}>{cleanName(s.nameEn)}</a> <span class="faint" lang="zh-Hant">{s.name}</span></td>
+                <td class="faint">{s.id}</td>
+                <td class="faint">{s.county}</td>
+                <td class="n"><strong>{fmt(v.wave_height_m, 1, " m")}</strong></td>
+                <td class="n">{fmt(v.wave_period_s, 1, " s")}</td>
+                <td><Fragment set:html={arrowSvg(v.wave_dir_deg, 12)} /> {compass(v.wave_dir_deg)}</td>
+                <td class="n">{fmt(v.wind_speed_ms, 1, " m/s")} {v.wind_speed_ms != null ? compass(v.wind_dir_deg) : ""}</td>
+                <td class="n">{fmt(v.sea_temp_c, 1, " °C")}</td>
+                <td class={a != null && a > 3 ? "old" : "faint"}>{a == null ? "–" : a <= 1 ? "current" : `${a} h old`}</td>
+                <td class="faint">{s.latest?.archiveStart?.slice(0, 10) ?? "–"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="buoys-panel">
+    <h2>Tide and weather stations ({other.length})</h2>
+    <div class="scroll">
+      <table class="data">
+        <thead><tr><th>Station</th><th>ID</th><th>Type</th><th>County</th><th class="n">Tide</th><th class="n">Water</th><th class="n">Wind</th></tr></thead>
+        <tbody>
+          {other.map((s) => {
+            const v = s.latest?.values ?? {};
+            return (
+              <tr>
+                <td><a href={`/buoys/${s.id}/`}>{s.nameEn}</a> <span class="faint" lang="zh-Hant">{s.name}</span></td>
+                <td class="faint">{s.id}</td>
+                <td class="faint">{s.typeEn}</td>
+                <td class="faint">{s.county}</td>
+                <td class="n">{fmt(v.tide_height_m, 2, " m")}</td>
+                <td class="n">{fmt(v.sea_temp_c, 1, " °C")}</td>
+                <td class="n">{fmt(v.wind_speed_ms, 1, " m/s")}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</Base>

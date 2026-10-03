@@ -1,0 +1,115 @@
+---
+import Base from "../../layouts/Base.astro";
+import { readStations, isWaveStation, type Station } from "../../lib/local";
+import { SPOTS } from "../../data/spots";
+import { readoutShell, swIcon, windIcon } from "../../lib/ui";
+import { cleanName, cleanZh } from "../../lib/surf";
+
+export function getStaticPaths() {
+  return readStations().map((station) => ({ params: { id: station.id }, props: { station } }));
+}
+const { station } = Astro.props as { station: Station };
+const wave = isWaveStation(station);
+const spots = SPOTS.filter((s) => s.buoys.includes(station.id));
+const waveStations = readStations().filter(isWaveStation).sort((a, b) => b.lat - a.lat);
+const l = station.latest;
+const name = cleanName(station.nameEn);
+const payload = {
+  id: station.id,
+  name,
+  lat: station.lat,
+  lon: station.lon,
+  wave,
+  spots: spots.map((s) => ({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, faces: s.faces })),
+};
+---
+<Base title={name} description={`Observations from ${station.nameEn} (${station.id}), Taiwan.`}>
+  <p class="crumb"><a href="/buoys/">Buoys</a> / {station.county}</p>
+  <section class="detail-head">
+    <h1 class="headline"><span class="en">{name}</span> <span class="zh" lang="zh-Hant">{cleanZh(station.name)}</span></h1>
+    <p class="facts">
+      {station.typeEn}, {station.id}.{station.address && <> {station.address}.</>}
+      {spots.length > 0 && <> Reference buoy for {spots.map((s, i) => <>{i > 0 && ", "}<a href={`/spots/${s.id}/`}>{s.name}</a></>)}.</>}
+    </p>
+    <label class="buoy-pick">Jump to buoy
+      <select id="pick">
+        {!wave && <option value={station.id} selected>{name} {station.name}</option>}
+        {waveStations.map((s) => <option value={s.id} selected={s.id === station.id}>{cleanName(s.nameEn)} {s.name}</option>)}
+      </select>
+    </label>
+  </section>
+
+  {wave && (
+    <>
+      <section class="detail-now">
+        <div class="readout" id="readout" set:html={readoutShell({
+          primary: "measured", measuredLabel: "Measured", forecastLabel: "Model here",
+          rows: [["waves", swIcon("obs"), "Waves"], ["sw1", swIcon("p1"), "Swell"], ["sw2", swIcon("p2"), "2nd swell"], ["wind", windIcon, "Wind"], ["water", "", "Water"]],
+        })} />
+        <figure class="rose-frame">
+          <div class="rose" id="rose"></div>
+          <figcaption><ul class="glyph-key"><li><Fragment set:html={swIcon("obs")} />Measured waves</li><li><Fragment set:html={swIcon("p1")} />Swell, model</li><li><Fragment set:html={windIcon} />Wind</li></ul></figcaption>
+        </figure>
+        <figure class="map-frame detail-map"><div id="map" class="map" aria-label={`Map around ${name}`}></div></figure>
+      </section>
+
+      <section class="detail-timeline">
+        <div class="panel-head"><h2>Last six days, measured</h2><p class="note">Dots and the dark line are the buoy. Coloured lines are the model's swell trains at the same spot, for context.</p></div>
+        <div class="legend-row" id="legend"></div>
+        <div class="timeline-scroll"><div id="timeline" class="timeline"></div></div>
+      </section>
+    </>
+  )}
+
+  <section class={wave ? "compare" : "record"}>
+    <h2>{wave ? "The full record" : "Readings"}</h2>
+    <dl class="facts-grid">
+      <div><dt>Station ID</dt><dd>{station.id}</dd></div>
+      <div><dt>Type</dt><dd>{station.typeEn} ({station.type})</dd></div>
+      <div><dt>Operator</dt><dd>{station.owner}</dd></div>
+      <div><dt>Position</dt><dd>{station.lat.toFixed(4)}, {station.lon.toFixed(4)}</dd></div>
+      <div><dt>Status</dt><dd>{station.active ? "Transmitting" : "Not transmitting (per O-B0076-001)"}</dd></div>
+      <div><dt>Local archive</dt><dd>{l ? <>{l.archiveRows} hourly rows since {l.archiveStart.slice(0, 10)}</> : "Empty"}</dd></div>
+    </dl>
+    <p class="downloads">
+      <a class="btn" href={`/data/csv/${station.id}.csv`} download>Download full archive (CSV)</a>
+      <a class="btn" href={`/data/obs/${station.id}.json`}>JSON (last 120 days)</a>
+    </p>
+
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Time window" id="range">
+        <button class="btn" data-days="2" aria-pressed="false">48 hours</button>
+        <button class="btn" data-days="7" aria-pressed="true">7 days</button>
+        <button class="btn" data-days="30" aria-pressed="false">30 days</button>
+        <button class="btn" data-days="all" aria-pressed="false">Whole archive</button>
+      </div>
+      {wave && <label class="toggle"><input type="checkbox" id="models" checked /> Overlay models (Open-Meteo)</label>}
+    </div>
+
+    {wave && (
+      <section class="panel" id="skill-panel">
+        <h2>How the models did here</h2>
+        <p class="src">
+          Each model's wave height against this buoy's measurements, matched hour by hour over the selected window (up to 92 days back).
+          Open-Meteo's past values are stitched from its most recent short-range forecasts, so this scores roughly day-one skill, not a 5-day forecast.
+          Buoys close inshore usually read lower than the open-ocean models.
+        </p>
+        <div id="skill" class="scroll"></div>
+      </section>
+    )}
+
+    <div id="charts"></div>
+
+    <details class="raw">
+      <summary>Latest 48 rows as a table</summary>
+      <div id="raw" class="scroll"></div>
+    </details>
+  </section>
+
+  <script type="application/json" id="buoy-data" set:html={JSON.stringify(payload)} />
+  <script>
+    import { initBuoy } from "../../lib/buoy-page";
+    document.getElementById("pick")!.addEventListener("change", (e) => (location.href = `/buoys/${(e.target as HTMLSelectElement).value}/`));
+    initBuoy(JSON.parse(document.getElementById("buoy-data")!.textContent!));
+  </script>
+</Base>
