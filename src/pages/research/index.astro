@@ -1,0 +1,18 @@
+---
+import Base from "../../layouts/Base.astro";
+import { Content } from "../../../RESEARCH.md";
+---
+<Base title="Data sources" description="What Taiwan wave data exists, where it comes from, and which models to trust.">
+  <article class="prose"><Content /></article>
+</Base>
+<style>
+  .prose { max-width: 860px; padding-top: 12px; }
+  .prose :global(h1) { margin: 24px 0 14px; font-size: clamp(2rem, 4vw, 2.8rem); text-shadow: 3px 2px 0 var(--misreg); }
+  .prose :global(h2) { margin: 40px 0 10px; padding-top: 12px; border-top: 4px double var(--ink); }
+  .prose :global(h3) { margin: 22px 0 6px; }
+  .prose :global(li) { margin: 4px 0; max-width: 70ch; }
+  .prose :global(table) { border-collapse: collapse; width: 100%; font-size: 0.85rem; margin: 10px 0; display: block; overflow-x: auto; }
+  .prose :global(th), .prose :global(td) { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .prose :global(th) { color: var(--ink-2); font-weight: 600; border-bottom: 1.5px solid var(--ink); }
+  .prose :global(code) { font-size: 0.85em; background: var(--surface); border: 1px solid var(--rule); padding: 0 4px; word-break: break-all; }
+</style>

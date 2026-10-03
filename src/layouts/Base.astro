@@ -1,0 +1,67 @@
+---
+import "uplot/dist/uPlot.min.css";
+import "../styles/global.css";
+import { readMeta } from "../lib/local";
+
+interface Props { title: string; description?: string }
+const { title, description = "Taiwan buoy observations, CWA forecasts and open wave models, side by side." } = Astro.props;
+const meta = readMeta();
+const path = Astro.url.pathname;
+const nav = [
+  ["/", "Now"],
+  ["/buoys/", "Buoys"],
+  ["/research/", "Data sources"],
+];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#efece3" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&family=Noto+Serif+TC:wght@400;700;900&display=swap" rel="stylesheet" />
+    <title>{title === "Taiwan Waves" ? title : `${title} · Taiwan Waves`}</title>
+  </head>
+  <body>
+    <header class="site">
+      <div class="wrap bar">
+        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span class="brand-zh" lang="zh-Hant">台灣浪況</span><span class="brand-en">Taiwan Waves</span></a>
+        <nav aria-label="Main">
+          {nav.map(([href, label]) => (
+            <a href={href} aria-current={(href === "/" ? path === "/" || path.startsWith("/spots/") : path.startsWith(href)) ? "page" : undefined}>{label}</a>
+          ))}
+        </nav>
+        <p class="fresh" id="freshness" data-fetched={meta?.fetchedAt ?? ""}>
+          {meta ? <>CWA data fetched <time datetime={meta.fetchedAt}>{meta.fetchedAt}</time></> : "No CWA data yet. Run bun run fetch."}
+        </p>
+      </div>
+    </header>
+    <main class="wrap">
+      <slot />
+    </main>
+    <footer class="wrap site-foot">
+      <p>
+        Observations, tide and recreation forecasts: Central Weather Administration (中央氣象署) open data, under Taiwan's Open Government Data License.
+        Model forecasts: <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0), which redistributes Météo-France MFWAM, NOAA GFS-Wave, ECMWF WAM and ECMWF IFS wind.
+        Map: <a href="https://protomaps.com">Protomaps</a>, © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors; bathymetry from NOAA ETOPO 2022.
+        Times are Taiwan time (UTC+8).
+      </p>
+    </footer>
+    <script>
+      import { relTime } from "../lib/format";
+      const el = document.getElementById("freshness");
+      const t = el?.dataset.fetched;
+      if (el && t) {
+        const ageH = (Date.now() - Date.parse(t)) / 36e5;
+        el.textContent = `CWA data fetched ${relTime(t)}` + (ageH > 6 ? ". Run bun run fetch to refresh" : "");
+        if (ageH > 6) el.classList.add("stale");
+      }
+    </script>
+  </body>
+</html>

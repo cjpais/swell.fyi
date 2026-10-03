@@ -1,0 +1,39 @@
+# Hourly: grow the observation archive (kept in R2) and redeploy swell.fyi with fresh data.
+name: Refresh data and deploy
+
+on:
+  schedule:
+    - cron: "20 * * * *" # :20 past each hour, after CWA's hourly buoy file has updated
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: refresh # never run two refreshes at once; they'd race on the archive
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CWA_API_KEY: ${{ secrets.CWA_API_KEY }} # optional; without it fetch reads CWA's public S3 bucket
+      PUBLIC_TILES_BASE: https://tiles.swell.fyi
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      - name: Pull archive from R2
+        run: scripts/archive-sync.sh pull
+      - name: Fetch CWA data
+        run: bun run fetch
+      - name: Push archive to R2
+        run: scripts/archive-sync.sh push
+
+      - name: Build
+        run: bun run build
+      - name: Deploy
+        run: npx wrangler deploy

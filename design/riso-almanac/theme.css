@@ -1,0 +1,115 @@
+/* Riso almanac: a Taiwanese farmer's almanac (農民曆) run off a risograph in a 1980s print shop.
+   Newsprint, federal-blue ink for everything typeset, a pink second drum for accents, a little
+   misregistration, halftone dots. Chinese leads: the spot's characters are the headline. */
+:root {
+  color-scheme: light;
+  --paper: #ece9e1;
+  --surface: #f3f1ea;
+  --ink: #1f3a73;
+  --ink-2: #3c5389;
+  --ink-3: #5d6f9a;
+  --rule: #c9cddb;
+  --rule-strong: #9aa6c4;
+  --accent: #c35775;
+  --link: #1f3a73;
+  --focus: #c35775;
+  --hover: #2b519c0f;
+
+  /* Data. Validated: partitions all-pairs (light, on --paper); wind tones a petrol/orange diverging pair. */
+  --p1: #2b519c; /* primary swell, blue drum */
+  --p2: #c35775; /* secondary swell, pink drum */
+  --p3: #b07600; /* wind waves, marigold */
+  --obs: #1f3a73;
+  --total: #2b519c1a;
+  --total-line: #2b519c66;
+  --good: #00678f;
+  --fair: #9aa0b4;
+  --poor: #c9690c;
+  --none: #b9bccb;
+  --night: #2b519c0d;
+  --grid: #d6d9e3;
+  --tide: #2b519c;
+  --tide-fill: #2b519c14;
+
+  --spot: #c35775;
+  --buoy: #1f3a73;
+  --buoy-ink: #f3f1ea;
+  --callout-bg: #f3f1ea;
+  --callout-ink: #1f3a73;
+  --callout-line: #c35775;
+  --callout-radius: 0;
+
+  --map-land: #f1eee6;
+  --map-land-2: #e3e1e4;
+  --map-sea-0: #d6dceb;
+  --map-sea-1: #c3cde4;
+  --map-sea-2: #aab8d8;
+  --map-sea-3: #92a4cc;
+  --map-sea-4: #7d92c0;
+  --map-contour: #c35775;
+  --map-coast: #1f3a73;
+  --map-road: #e7b9c4;
+  --map-label: #1f3a73;
+
+  --rose-face: #f3f1ea;
+  --rose-window: #c357751a;
+  --rose-window-core: #c357752e;
+  --rose-land: #dad8d2;
+  --rose-ring: 1.5;
+  --rose-cardinals: "北 東 南 西";
+
+  --font-display: "Bricolage Grotesque";
+  --font-num: "Bricolage Grotesque";
+  --font-body: "Bricolage Grotesque";
+  --font-zh: "Noto Serif TC";
+  --radius: 0px;
+  --chip-radius: 0;
+
+  --dots: radial-gradient(#2b519c26 0.9px, transparent 1.2px) 0 0 / 5px 5px;
+}
+
+html { font-variation-settings: "opsz" 14; }
+h1, h2, h3 { font-weight: 800; letter-spacing: -0.01em; font-stretch: 80%; font-variation-settings: "opsz" 96, "wdth" 75; }
+h2 { font-size: 1.55rem; }
+h3 { font-size: 1.1rem; font-variation-settings: "opsz" 24, "wdth" 85; }
+.ro-hs, .spot-row .hs, .buoy-row .hs, .co-val, .ro-unit { font-weight: 800; font-variation-settings: "opsz" 96, "wdth" 75; }
+.ro-hs { letter-spacing: -0.03em; text-shadow: 3px 2px 0 #c3577566; }
+.ro-ms .ro-hs { text-shadow: 2px 1px 0 #c3577555; }
+
+/* Header: almanac masthead with a seal and a double rule. */
+header.site { border-bottom: 4px double var(--ink); background: var(--paper); }
+.brand-mark {
+  width: 38px; height: 38px; background: var(--accent); border-radius: 4px; transform: rotate(-4deg);
+  display: grid; place-items: center; box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 4px var(--paper);
+}
+.brand-mark::after { content: "浪"; font: 900 22px/1 "Noto Serif TC"; color: var(--paper); }
+.brand { gap: 12px; }
+.brand-zh { order: -1; font: 900 1.55rem/1 "Noto Serif TC"; color: var(--ink); letter-spacing: 0.04em; }
+.brand-en { font-size: 0.95rem; font-weight: 600; color: var(--ink-2); font-variation-settings: "opsz" 14; }
+header.site nav a[aria-current="page"] { border-bottom-color: var(--accent); }
+
+/* Chinese leads the headline, English sits beside it; both slightly misregistered. */
+.detail-head h1, .home-intro h1 { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 18px; }
+.detail-head h1 .zh { order: -1; font-size: clamp(3.4rem, 8vw, 5.6rem); font-weight: 900; color: var(--ink); margin: 0; letter-spacing: 0.04em; text-shadow: 3px 2px 0 #c3577555; }
+.detail-head h1 .en { font-size: clamp(1.6rem, 3vw, 2.2rem); color: var(--ink-2); }
+.home-intro h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); text-shadow: 2px 2px 0 #c3577544; }
+.home-intro h1::before { content: "台灣海況"; font: 900 1em/1 "Noto Serif TC"; letter-spacing: 0.04em; }
+
+/* Boxed like almanac tables: hard rules, no rounding. */
+.readout { border: 1.5px solid var(--ink); padding: 14px 18px 10px; background: var(--paper); }
+.ro-list { border-top: 1.5px solid var(--ink); }
+.region h3 { --region-rule: 1.5px solid var(--ink); border-bottom: 4px double var(--ink); }
+.map-frame .map { border: 1.5px solid var(--ink); }
+.callout { border: 1.5px solid var(--ink); font-weight: 600; box-shadow: 2px 2px 0 var(--accent); }
+.callout .co-name { font-variation-settings: "opsz" 14, "wdth" 85; }
+.callout-pin::after { border-radius: 50%; transform: none; border-color: var(--paper); }
+.key-spot { border-radius: 50%; transform: none; }
+.buoy-dot { border-radius: 2px; }
+.wind-chip { border: 1px solid var(--tone); background: transparent; }
+.btn { border-width: 1.5px; }
+table.data th { border-bottom: 1.5px solid var(--ink); }
+.c-card { font-family: "Noto Serif TC"; font-weight: 900; }
+.tl-dayname .dn { font-variation-settings: "wdth" 80; }
+
+.map-legend, .map-styles { border-radius: 0; box-shadow: 2px 2px 0 var(--accent); }
+.ml-name { font-variation-settings: "opsz" 14, "wdth" 85; }

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Taiwan Waves · design directions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..900,0..100,0..1&family=Jost:wght@400..700&family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Barlow+Condensed:ital,wght@1,700;1,800&family=Barlow:wght@400;600&family=Noto+Serif+TC:wght@900&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.55 system-ui, sans-serif; color: #222; background: #fafafa; }
+    main { max-width: 1240px; margin: 0 auto; padding: 40px 24px 80px; }
+    h1 { font-size: 1.9rem; margin: 0 0 8px; }
+    .intro { color: #555; max-width: 70ch; margin: 0 0 32px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; max-width: 900px; }
+    .card { border-radius: 10px; overflow: hidden; background: var(--paper); color: var(--ink); border: 1px solid #0002; display: flex; flex-direction: column; }
+    .card .top { padding: 22px 22px 8px; display: grid; grid-template-columns: 1fr 120px; gap: 12px; align-items: start; }
+    .card h2 { margin: 0; font-family: var(--font-display); line-height: 1.05; }
+    .card .spec { font-family: var(--font-num); font-size: 3.4rem; line-height: 1; margin: 10px 0 0; }
+    .card .spec small { font-size: 0.4em; color: var(--ink-2); }
+    .card p { margin: 10px 22px 0; font-size: 0.92rem; color: var(--ink-2); }
+    .sw { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 22px 0; }
+    .sw span { width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 1px #0002; }
+    .sw-label { margin: 6px 22px 0; font-size: 0.75rem; color: var(--ink-3); }
+    .links { margin-top: auto; padding: 18px 22px 22px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .links a { color: var(--ink); border: 1.5px solid var(--ink); padding: 6px 12px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; }
+    .links a:hover { background: var(--ink); color: var(--paper); }
+    .rose svg { width: 120px; height: 120px; overflow: visible; }
+    .c-face { fill: var(--rose-face); } .c-ring { fill: none; stroke: var(--ink); stroke-width: 2.5; }
+    .c-window { fill: var(--rose-window); } .c-window-core { fill: var(--rose-window-core); }
+    .c-tick { stroke: var(--ink-3); } .c-tick.major { stroke: var(--ink); stroke-width: 2; }
+    .c-card { font: 700 14px sans-serif; fill: var(--ink-2); } .c-land { fill: var(--rose-land); } .c-coast { stroke: var(--ink); stroke-width: 2; }
+    .c-arrow { stroke: var(--rose-face); stroke-width: 1.5; paint-order: stroke; } .c-arrow.p1 { fill: var(--p1); } .c-arrow.p2 { fill: var(--p2); } .c-arrow.p3 { fill: var(--p3); }
+    .c-wind path { stroke: var(--ink); stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round; } .c-wind-casing { fill: none; stroke: var(--rose-face); stroke-width: 6; stroke-linecap: round; } .c-hub { fill: var(--ink); }
+    section.notes { margin-top: 48px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px; }
+    section.notes h2 { font-size: 1.15rem; margin: 0 0 8px; }
+    section.notes ul { margin: 0; padding-left: 1.1em; color: #444; font-size: 0.94rem; }
+    section.notes li { margin-bottom: 8px; }
+    code { background: #0000000d; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Taiwan Waves: two retro directions</h1>
+  <p class="intro">
+    Riso almanac is the lead direction; Tide calendar shares the same pages and layout. The app itself is untouched.
+    On spot and buoy pages, hover the timeline and the readout, compass rose and map follow along. The map has a key and three swell styles to compare (top right of the map).
+  </p>
+
+  <p class="intro"><a href="/palettes/"><strong>Riso palettes: the Riso almanac look in Blue + pink and Overprint →</strong></a><br><a href="/riso/"><strong>Riso iterations: five variations on Riso almanac and Overprint →</strong></a><br><a href="/styles/">Style specimen: eight broader ideas on one page →</a></p>
+  <div class="cards">
+    <article class="card" style="--paper:#ece9e1;--ink:#1f3a73;--ink-2:#3c5389;--ink-3:#5d6f9a;--p1:#2b519c;--p2:#c35775;--p3:#b07600;--good:#00678f;--rose-face:#f3f1ea;--rose-window:#c357751a;--rose-window-core:#c357752e;--rose-land:#dad8d2;--font-display:'Noto Serif TC';--font-num:'Bricolage Grotesque'">
+      <div class="top">
+        <div>
+          <h2 style="font:800 2.1rem 'Bricolage Grotesque';font-variation-settings:'opsz' 96,'wdth' 75;text-shadow:2px 2px 0 #c3577555"><span style="font:900 1em 'Noto Serif TC'">農民曆</span><br>Riso almanac</h2>
+          <div class="spec" style="font-weight:800;font-variation-settings:'opsz' 96,'wdth' 75;text-shadow:3px 2px 0 #c3577566">1.4<small>m</small></div>
+        </div>
+        <div class="rose" data-rose></div>
+      </div>
+      <p>A Taiwanese farmer's almanac run off a risograph in an 1980s print shop. Newsprint, federal-blue ink for everything typeset, a pink second drum for accents, and a little misregistration. Chinese leads: the spot's characters are the headline and the compass reads 北 東 南 西. The most local and graphic option.</p>
+      <div class="sw"><span style="background:#ece9e1"></span><span style="background:#1f3a73"></span><span style="background:#c35775"></span><span style="background:#b07600"></span><span style="background:#aab8d8"></span></div>
+      <div class="sw-label">Newsprint, blue drum, pink drum, marigold, sea tint</div>
+      <div class="links"><a href="/riso-almanac/">Home</a><a href="/riso-almanac/spot.html?id=jinzun">Spot: Jinzun</a><a href="/riso-almanac/buoy.html?id=46708A">Buoy: Guishandao</a></div>
+    </article>
+    <article class="card" style="--paper:#e6d9bc;--ink:#3b2a1e;--ink-2:#5f4a39;--ink-3:#75604d;--p1:#1a588f;--p2:#bc5c80;--p3:#a4780e;--good:#00678f;--rose-face:#efe5cd;--rose-window:#1a588f12;--rose-window-core:#1a588f22;--rose-land:#d4c39e;--font-display:'Fraunces';--font-num:'Fraunces'">
+      <div class="top">
+        <div>
+          <h2 style="font-variation-settings:'SOFT' 100,'WONK' 1;font-weight:800;font-size:1.9rem">Tide calendar</h2>
+          <div class="spec" style="font-variation-settings:'SOFT' 100,'WONK' 1;font-weight:850">1.4<small>m</small></div>
+        </div>
+        <div class="rose" data-rose></div>
+      </div>
+      <p>The free tide calendar a 1970s surf shop hands out, printed on kraft card. Chocolate ink, a four-band avocado, gold, sienna and chocolate stripe under the masthead, soft fat serif numerals (Fraunces at full softness), and a faded-teal sea on the map. The warmer, more "surf shop" option.</p>
+      <div class="sw"><span style="background:#e6d9bc"></span><span style="background:#3b2a1e"></span><span style="background:#6f7a35"></span><span style="background:#c9962e"></span><span style="background:#b25634"></span><span style="background:#91b2aa"></span></div>
+      <div class="sw-label">Paper, ink, stripe, sea</div>
+      <div class="links"><a href="/tide-calendar/">Home</a><a href="/tide-calendar/spot.html?id=jinzun">Spot: Jinzun</a><a href="/tide-calendar/buoy.html?id=46708A">Buoy: Guishandao</a></div>
+    </article>
+
+
+  </div>
+
+  <section class="notes">
+    <div>
+      <h2>Round two changes</h2>
+      <ul>
+        <li><strong>No layout shift.</strong> The spot readout has fixed rows and only its text changes, so scrubbing or scrolling never moves the page. Measured: zero layout-shift entries across scrolling and a 30-position sweep.</li>
+        <li><strong>Wind and swell look different, not just coloured differently.</strong> Swell is always coloured and wide. Wind is always a thin ink line with an open head and knot barbs. The compass and the map use the same glyphs.</li>
+        <li><strong>Map key and labels.</strong> A key in the map corner shows each glyph with its current numbers, and every arrow is labeled on the map.</li>
+        <li><strong>Three swell styles to compare</strong> (your choice is remembered): Arrows, Crests, and Swell lines, which adds wind streaks across the whole map.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Simplified readout</h2>
+      <ul>
+        <li><strong>Forecast and measured side by side:</strong> the MFWAM model number next to the nearest buoy's, each labeled with its source. The page ends with a plain explanation of the difference.</li>
+        <li>Rows: swell, 2nd swell, wind (offshore, cross-shore or onshore), tide with the next high and low, and water temperature (from the buoy, or the model when there's no buoy).</li>
+        <li><strong>Wind waves removed</strong> from the readout, chart, compass and map. They're still inside the total-sea area, which is now labeled "includes local chop".</li>
+        <li>When the swell can't reach the beach (Baisha, for example), a warning replaces the empty line and the blocked arrows fade.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Run it</h2>
+      <ul>
+        <li><code>bun design/serve.mjs</code> serves on <code>localhost:4848</code>. It reads the app's <code>public/data</code> and local <code>tiles/taiwan.pmtiles</code>; forecasts come live from Open-Meteo.</li>
+        <li>Night session is parked in <code>design/archive/</code>.</li>
+        <li>Prototype code: no build step, no tests.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<script type="module">
+  import { renderCompass } from "/shared/compass.js";
+  document.querySelectorAll("[data-rose]").forEach((el) => renderCompass(el, {
+    faces: 112.5,
+    swells: [{ dir: 80, h: 1.2, cls: "p1" }, { dir: 140, h: 0.5, cls: "p2" }],
+    wind: { dir: 280, speed: 4, tone: "good" },
+    label: "Sample compass",
+  }));
+</script>
+</body>
+</html>

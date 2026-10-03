@@ -1,0 +1,13 @@
+{
+  // TEMPORARY multipart uploader for files over wrangler's 315 MB limit, using the R2
+  // binding (no S3 keys needed). Deploy, upload with scripts/r2-upload.mjs, then delete:
+  //   npx wrangler delete -c workers/upload/wrangler.jsonc
+  // `bun run tiles:upload` does all three steps.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "swell-upload",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "taiwan-waves" }],
+  "routes": [{ "pattern": "upload.swell.fyi", "custom_domain": true }],
+  "workers_dev": false
+}
