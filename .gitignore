@@ -37,3 +37,6 @@ public/data/
 
 # Design explorations: kept locally, not in the repo (run with bun design/serve.mjs)
 design/
+
+# Wrangler local secrets
+.dev.vars

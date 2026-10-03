@@ -9,17 +9,49 @@ import { makeConditions, roseSwells, swellNote, timelineRows } from "./condition
 import { createMap, marker, conditionOverlay } from "./map";
 import { PARTS, esc, legendHtml, slots, swIcon, tideAt, windChip, windIcon, windKey } from "./ui";
 import { HOUR as H, at, facesDeg, fetchSST, fetchSpotWind, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile, type Wind } from "./surf";
+import { cwaUrl, getCwa, loadSpotForecast, loadSpotTides, loadStations, type ForecastRow, type LiveStation } from "./data";
 
+type BuoyRef = { id: string; name: string; zh: string; lat: number; lon: number; km: number };
+type Built = { spot: { id: string; name: string; lat: number; lon: number; model: [number, number]; faces: string; cwaPoint: string }; buoys: BuoyRef[] };
 type Payload = {
-  spot: { id: string; name: string; lat: number; lon: number; model: [number, number]; faces: string };
-  cwa: { code: string; name: string; lat: number; lon: number; issued: string; rows: [string, number | null, number | null, number | null, number | null, number | null][] } | null;
-  buoy: { id: string; name: string; zh: string; lat: number; lon: number; km: number; hs: number | null; time: string | null } | null;
+  spot: Built["spot"];
+  cwa: { code: string; name: string; lat: number; lon: number; issued: string; rows: ForecastRow[] } | null;
+  buoy: (BuoyRef & { hs: number | null; time: string | null }) | null;
   tide: { name: string; events: [string, string, number | null][] } | null;
 };
 
 const $ = (id: string) => document.getElementById(id)!;
 
-export async function initSpot(p: Payload) {
+/** The live pieces from the swell-data Worker: CWA's forecast, the tide, and the nearest working buoy. */
+async function live(b: Built): Promise<Payload> {
+  const [rec, tides, stations] = await Promise.all([loadSpotForecast(), loadSpotTides(), loadStations().catch(() => [] as LiveStation[])]);
+  const point = rec?.points[b.spot.cwaPoint];
+  const byId = new Map(stations.map((s) => [s.id, s]));
+  // Nearest buoy (in the spot's order) with a wave reading in the last 12 hours.
+  const working = b.buoys.find((x) => {
+    const l = byId.get(x.id)?.latest;
+    return l?.values.wave_height_m != null && Date.now() - Date.parse(l.time) < 12 * 36e5;
+  });
+  const l = working ? byId.get(working.id)!.latest! : null;
+  return {
+    spot: b.spot,
+    cwa: point && rec ? { code: b.spot.cwaPoint, name: point.name, lat: point.lat, lon: point.lon, issued: rec.issued, rows: point.rows } : null,
+    buoy: working ? { ...working, hs: l!.values.wave_height_m, time: l!.time } : null,
+    tide: tides?.[b.spot.id] ?? null,
+  };
+}
+
+function buoyLine(p: Payload, all: BuoyRef[]) {
+  const link = (b: BuoyRef) => `<a href="/buoys/${b.id}/">${esc(b.name)}</a>`;
+  const others = all.filter((b) => b.id !== p.buoy?.id);
+  $("buoys").innerHTML =
+    (p.buoy ? ` Nearest working buoy: ${link(p.buoy)}, ${p.buoy.km.toFixed(0)} km away.` : all.length ? " No nearby buoy is reporting waves right now." : "") +
+    (others.length ? ` ${p.buoy ? "Also nearby" : "Nearby"}: ${others.map(link).join(", ")}.` : "");
+}
+
+export async function initSpot(built: Built) {
+  const p = await live(built);
+  buoyLine(p, built.buoys);
   const s = p.spot;
   const now = nowS();
   const faces = facesDeg(s.faces);
@@ -37,7 +69,7 @@ export async function initSpot(p: Payload) {
     fetchMarine(s.model[0], s.model[1], 3, 10).catch((e: Error) => e),
     fetchWind(s.lat, s.lon, 3, 10).catch((e: Error) => e),
     fetchSpotWind(s.lat, s.lon, { past: 1, days: 7 }).catch(() => null),
-    p.buoy ? fetch(`/data/obs/${p.buoy.id}.json`).then((r) => r.json() as Promise<ObsFile>).catch(() => null) : Promise.resolve(null),
+    p.buoy ? getCwa<ObsFile>(`obs/${p.buoy.id}.json`).catch(() => null) : Promise.resolve(null),
     fetchSST(s.model[0], s.model[1]).catch(() => null),
   ]);
   const sea = partitioned(marine);
@@ -119,11 +151,11 @@ function sourceTable(p: Payload, { now, sea, marine, wind }: { now: number; sea:
     <table class="data">
       <thead><tr><th>Source</th><th>What it gives</th><th class="n">Next 24 h peak</th><th>Raw data</th></tr></thead>
       <tbody>
-        ${p.buoy ? `<tr><td>${esc(p.buoy.name)} buoy (CWA O-B0075)</td><td>Measured height, period, direction, water temperature</td><td class="n">${fmt(p.buoy.hs)} m at ${p.buoy.time ? hhmm(Date.parse(p.buoy.time) / 1000) : "–"}</td><td><a href="/data/obs/${p.buoy.id}.json">JSON</a>, <a href="/data/csv/${p.buoy.id}.csv">CSV</a></td></tr>` : ""}
-        ${p.cwa ? `<tr><td>CWA recreation forecast, ${esc(p.cwa.name)} (M-B0078-001)</td><td>CWA's own WW3 run: height, period, direction, every 3 h</td><td class="n">${fmt(cwaPeak)} m</td><td><a href="/data/cwa-recreation.json">JSON</a></td></tr>` : ""}
+        ${p.buoy ? `<tr><td>${esc(p.buoy.name)} buoy (CWA O-B0075)</td><td>Measured height, period, direction, water temperature</td><td class="n">${fmt(p.buoy.hs)} m at ${p.buoy.time ? hhmm(Date.parse(p.buoy.time) / 1000) : "–"}</td><td><a href="${cwaUrl(`obs/${p.buoy.id}.json`)}">JSON</a>, <a href="${cwaUrl(`csv/${p.buoy.id}.csv`)}">CSV</a></td></tr>` : ""}
+        ${p.cwa ? `<tr><td>CWA recreation forecast, ${esc(p.cwa.name)} (M-B0078-001)</td><td>CWA's own WW3 run: height, period, direction, every 3 h</td><td class="n">${fmt(cwaPeak)} m</td><td><a href="${cwaUrl("recreation.json")}">JSON</a></td></tr>` : ""}
         ${sea ? `<tr><td>${sea.label} via Open-Meteo</td><td>Total sea plus swell trains, hourly</td><td class="n">${fmt(peak(sea.time, sea.get("wave_height")))} m</td><td><a href="${esc(seaUrl)}">API</a></td></tr>` : `<tr><td>Open-Meteo marine</td><td colspan="3">Request failed${marine instanceof Error ? `: ${esc(marine.message)}` : ""}</td></tr>`}
         ${wind ? `<tr><td>ECMWF IFS via Open-Meteo</td><td>10 m wind and gusts, hourly</td><td class="n">${fmt(peak(wind.time, wind.wind_speed_10m))} m/s</td><td><a href="${esc(wind.url)}">API</a></td></tr>` : ""}
-        ${p.tide ? `<tr><td>CWA tide forecast, ${esc(p.tide.name)} (F-A0021-001)</td><td>High and low times; the curve between is interpolated</td><td class="n"></td><td><a href="/data/tides.json">JSON</a></td></tr>` : ""}
+        ${p.tide ? `<tr><td>CWA tide forecast, ${esc(p.tide.name)} (F-A0021-001)</td><td>High and low times; the curve between is interpolated</td><td class="n"></td><td><a href="${cwaUrl("tides.json")}">JSON</a></td></tr>` : ""}
       </tbody>
     </table>`;
 }
@@ -152,7 +184,7 @@ function initCompare(p: Payload, marine: Grid | Error, wind: Grid | Error, obs: 
 
   // --- series builders ---
   const cwaT = p.cwa?.rows.map((r) => sec(r[0])) ?? [];
-  const cwa = (i: number): Series[] => (p.cwa ? [{ label: "CWA WW3", color: "--s2", t: cwaT, v: p.cwa.rows.map((r) => r[i]), style: "line+points" }] : []);
+  const cwa = (i: number): Series[] => (p.cwa ? [{ label: "CWA WW3", color: "--s2", t: cwaT, v: p.cwa.rows.map((r) => r[i] as number | null), style: "line+points" }] : []);
 
   const obsT = obs?.rows.map((r) => sec(String(r[0]))) ?? [];
   const col = (name: string) => {
@@ -214,7 +246,7 @@ function initCompare(p: Payload, marine: Grid | Error, wind: Grid | Error, obs: 
     const add = (name: string, t: number[], v: (number | null)[]) => v.some((x) => x != null) && cols.push({ name, t, v });
     for (const [c, name] of [["wave_height_m", "hs"], ["wave_period_s", "tm"], ["wave_dir_deg", "dir"], ["wind_speed_ms", "wind"], ["wind_dir_deg", "wind_dir"]] as const)
       if (obs) add(`buoy_${p.buoy!.id}_${name}`, obsT, col(c));
-    if (p.cwa) ["hs", "dir", "tm", "current_dir", "current_speed"].forEach((n, i) => add(`cwa_${n}`, cwaT, p.cwa!.rows.map((r) => r[i + 1])));
+    if (p.cwa) ["hs", "dir", "tm", "current_dir", "current_speed"].forEach((n, i) => add(`cwa_${n}`, cwaT, p.cwa!.rows.map((r) => r[i + 1] as number | null)));
     if (!(marine instanceof Error))
       for (const m of WAVE_MODELS)
         for (const v of ["wave_height", "wave_period", "wave_direction", "swell_wave_height", "swell_wave_period", "swell_wave_direction", "secondary_swell_wave_height", "secondary_swell_wave_period", "secondary_swell_wave_direction", "wind_wave_height", "wind_wave_period", "wind_wave_direction"])

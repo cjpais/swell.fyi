@@ -1,11 +1,15 @@
-// Build-time readers for the JSON written by scripts/fetch-cwa.ts.
+// Build-time readers. Pages are built from the station list (names, IDs, positions), which
+// barely changes; every reading on them loads live in the browser from the swell-data Worker
+// (src/lib/data.ts). The list comes from the local snapshot that `bun run fetch` writes
+// (public/data/cwa/), or, when there isn't one (CI's deploy job), from the Worker.
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { DATA } from "./data";
 
-const DATA = join(process.cwd(), "public", "data");
+const LOCAL = join(process.cwd(), "public", "data", "cwa");
 
 function read<T>(name: string): T | null {
-  const f = join(DATA, name);
+  const f = join(LOCAL, name);
   return existsSync(f) ? (JSON.parse(readFileSync(f, "utf8")) as T) : null;
 }
 
@@ -34,33 +38,26 @@ export type Station = {
   latest: Latest | null;
 };
 
-export type Meta = { fetchedAt: string; via: string; datasets: Record<string, { name: string; issued?: string }> };
-
-export const readMeta = () => read<Meta>("meta.json");
-export const readStations = () => read<Station[]>("stations.json") ?? [];
-
-export type ObsFile = { id: string; columns: string[]; rows: (string | number | null)[][] };
-export const readObs = (id: string) => read<ObsFile>(`obs/${id}.json`);
+let stations: Promise<Station[]> | null = null;
+/** Every CWA marine station: the local snapshot, else the live list from the Worker. */
+export function stationList(): Promise<Station[]> {
+  return (stations ??= (async () => {
+    const local = read<Station[]>("stations.json");
+    if (local) return local;
+    if (!/^https?:/.test(DATA)) return [];
+    const r = await fetch(`${DATA}/cwa/stations.json`);
+    if (!r.ok) throw new Error(`Station list: HTTP ${r.status} from ${DATA}/cwa/stations.json`);
+    return (await r.json()) as Station[];
+  })());
+}
 
 /** Stations that have reported a wave height at some point in the archive. */
 export const isWaveStation = (s: Station) => s.observes.includes("WaveHeight") || s.latest?.values.wave_height_m != null;
 
-export type Recreation = {
-  issued: string;
-  columns: string[];
-  points: Record<string, { name: string; lat: number; lon: number; rows: [string, number | null, number | null, number | null, number | null, number | null][] }>;
-};
-export const readRecreation = () => read<Recreation>("cwa-recreation.json");
-
-/** Hourly wave height over the last `hours`, as [unixSeconds, Hs] pairs. */
-export function recentHs(id: string, hours = 72): [number, number | null][] {
-  const obs = readObs(id);
-  if (!obs) return [];
-  const cutoff = Date.now() - hours * 36e5;
-  return obs.rows
-    .map((r) => [Date.parse(String(r[0])) / 1000, r[1] as number | null] as [number, number | null])
-    .filter(([t]) => t * 1000 >= cutoff);
-}
+// ---------- local snapshot only (design labs; the live pages don't use these) ----------
+export type Meta = { fetchedAt: string; via: string; datasets: Record<string, { name: string; issued?: string }> };
+export const readMeta = () => read<Meta>("meta.json");
+export const readStations = () => read<Station[]>("stations.json") ?? [];
 
 export type TideLocation = { id: string; name: string; lat: number; lon: number; events: [string, "high" | "low", number | null][] };
 export function nearestTide(lat: number, lon: number): TideLocation | null {

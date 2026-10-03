@@ -5,42 +5,14 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 export const ROOT = join(import.meta.dir, "..", "..");
-export const PUBLIC_DATA = join(ROOT, "public", "data");
+/** Local snapshot of the live CWA files, laid out as the Worker serves them under /cwa/. */
+export const PUBLIC_DATA = join(ROOT, "public", "data", "cwa");
 export const ARCHIVE = join(ROOT, "data", "archive");
 export const OBS_ARCHIVE = join(ARCHIVE, "cwa-obs");
 
-export const OBS_COLUMNS = [
-  "time",
-  "wave_height_m",
-  "wave_dir_deg",
-  "wave_period_s",
-  "sea_temp_c",
-  "air_temp_c",
-  "pressure_hpa",
-  "wind_speed_ms",
-  "wind_dir_deg",
-  "wind_gust_ms",
-  "tide_height_m",
-  "current_dir_deg",
-  "current_speed_ms",
-  "source",
-] as const;
-
-/** Values for OBS_COLUMNS minus `source`. */
-export type ObsRow = (string | number | null)[];
-export type ArchiveRow = (string | number | null)[];
-
-export const SOURCE_OPEN_DATA = "O-B0075";
-export const SOURCE_OCEAN_PORTAL = "ocean.cwa.gov.tw";
-
-export const num = (v: unknown): number | null => {
-  if (v === undefined || v === null || v === "" || v === "None" || v === "-") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-};
-
-// CWA's JSON is converted from XML, so single-element lists can arrive as bare objects.
-export const arr = <T>(v: T | T[] | undefined | null): T[] => (v == null ? [] : Array.isArray(v) ? v : [v]);
+// Column list, row types and parsing helpers are shared with the Worker (scripts/lib/cwa.ts).
+export { OBS_COLUMNS, SOURCE_OPEN_DATA, SOURCE_OCEAN_PORTAL, num, arr, type ObsRow, type ArchiveRow } from "./cwa";
+import { OBS_COLUMNS, SOURCE_OPEN_DATA, num, type ObsRow, type ArchiveRow } from "./cwa";
 
 const csvCell = (v: unknown) => {
   if (v === null || v === undefined) return "";

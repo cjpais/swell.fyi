@@ -1,6 +1,6 @@
 {
-  // Model data for swell.fyi: rebuilds the explore map's field.json from Open-Meteo on a cron,
-  // keeps it in R2 and serves it from the edge. Deploy: bun run deploy:data
+  // Live data for swell.fyi: the explore map's field.json (Open-Meteo) and CWA's buoys, tides
+  // and forecast, rebuilt on a cron, kept in R2 and served from the edge. Deploy: bun run deploy:data
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "swell-data",
   "main": "src/index.ts",
@@ -8,9 +8,11 @@
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "taiwan-waves" }],
   "routes": [{ "pattern": "data.swell.fyi", "custom_domain": true }],
   "workers_dev": false,
-  // Every 30 min: a cheap check of Open-Meteo's model metadata. It only rebuilds (~350
-  // Open-Meteo calls) when MFWAM or ECMWF IFS has published a new run.
-  "triggers": { "crons": ["*/30 * * * *"] },
+  // Every 10 min: cheap checks of Open-Meteo's model metadata and CWA's S3 ETags. A part is
+  // only rebuilt when its upstream changed (field: ~6 times a day; CWA obs: hourly).
+  "triggers": { "crons": ["*/10 * * * *"] },
+  "limits": { "cpu_ms": 60000 },
   "observability": { "enabled": true }
-  // Optional secret, for a commercial Open-Meteo plan: npx wrangler secret put OPEN_METEO_API_KEY -c workers/data/wrangler.jsonc
+  // Secrets: REFRESH_TOKEN (for POST /refresh); optional OPEN_METEO_API_KEY, CWA_API_KEY.
+  //   npx wrangler secret put NAME -c workers/data/wrangler.jsonc
 }

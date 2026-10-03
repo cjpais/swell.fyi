@@ -2,6 +2,7 @@
 // drawn on the explore map as a stepped heatmap: flat ink bands in a MapLibre image layer
 // under the land, so the coastline masks it for free. Static: it redraws only when the hour does.
 import type { Map as MlMap, ImageSource } from "maplibre-gl";
+import { DATA, getJson } from "./data";
 
 export type FieldGrid = {
   lon0: number; lat0: number; d: number; nx: number; ny: number;
@@ -18,15 +19,11 @@ export type FieldSpot = {
 export type Field = { fetchedAt: string; models: { wave: string; wind: string }; grid: FieldGrid; spots: Record<string, FieldSpot> };
 
 // Served by workers/data. PUBLIC_DATA_BASE=/data reads a local copy from `bun run fetch:field`.
-const DATA = (import.meta.env.PUBLIC_DATA_BASE || "https://data.swell.fyi").replace(/\/$/, "");
 /** Past this, the forecast is flagged as old. The Worker rebuilds at least every 6 h. */
 export const FIELD_STALE_H = 12;
 
 export async function loadField(): Promise<Field | null> {
-  try {
-    const r = await fetch(`${DATA}/field.json`);
-    return r.ok ? ((await r.json()) as Field) : null;
-  } catch { return null; }
+  return getJson<Field>(`${DATA}/field.json`).catch(() => null);
 }
 
 /** A line for the panel when the forecast is missing or old, else null. */

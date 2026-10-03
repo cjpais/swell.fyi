@@ -1,18 +1,19 @@
 ---
 import Base from "../../layouts/Base.astro";
-import { readStations, isWaveStation, type Station } from "../../lib/local";
+import { stationList, isWaveStation, type Station } from "../../lib/local";
+import { cwaUrl } from "../../lib/data";
 import { SPOTS } from "../../data/spots";
 import { readoutShell, swIcon, windIcon } from "../../lib/ui";
 import { cleanName, cleanZh } from "../../lib/surf";
 
-export function getStaticPaths() {
-  return readStations().map((station) => ({ params: { id: station.id }, props: { station } }));
+// One page per station in the list; its readings and archive load live (src/lib/buoy-page.ts).
+export async function getStaticPaths() {
+  return (await stationList()).map((station) => ({ params: { id: station.id }, props: { station } }));
 }
 const { station } = Astro.props as { station: Station };
 const wave = isWaveStation(station);
 const spots = SPOTS.filter((s) => s.buoys.includes(station.id));
-const waveStations = readStations().filter(isWaveStation).sort((a, b) => b.lat - a.lat);
-const l = station.latest;
+const waveStations = (await stationList()).filter(isWaveStation).sort((a, b) => b.lat - a.lat);
 const name = cleanName(station.nameEn);
 const payload = {
   id: station.id,
@@ -68,12 +69,12 @@ const payload = {
       <div><dt>Type</dt><dd>{station.typeEn} ({station.type})</dd></div>
       <div><dt>Operator</dt><dd>{station.owner}</dd></div>
       <div><dt>Position</dt><dd>{station.lat.toFixed(4)}, {station.lon.toFixed(4)}</dd></div>
-      <div><dt>Status</dt><dd>{station.active ? "Transmitting" : "Not transmitting (per O-B0076-001)"}</dd></div>
-      <div><dt>Local archive</dt><dd>{l ? <>{l.archiveRows} hourly rows since {l.archiveStart.slice(0, 10)}</> : "Empty"}</dd></div>
+      <div><dt>Status</dt><dd id="status">{station.active ? "Transmitting" : "Not transmitting (per O-B0076-001)"}</dd></div>
+      <div><dt>Archive</dt><dd id="archive">Loading…</dd></div>
     </dl>
     <p class="downloads">
-      <a class="btn" href={`/data/csv/${station.id}.csv`} download>Download full archive (CSV)</a>
-      <a class="btn" href={`/data/obs/${station.id}.json`}>JSON (last 120 days)</a>
+      <a class="btn" href={cwaUrl(`csv/${station.id}.csv`)}>Download full archive (CSV)</a>
+      <a class="btn" href={cwaUrl(`obs/${station.id}.json`)}>JSON (last 120 days)</a>
     </p>
 
     <div class="controls">

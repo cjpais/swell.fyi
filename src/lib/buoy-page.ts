@@ -7,6 +7,7 @@ import { renderTimeline, type Row } from "./timeline";
 import { createMap, marker, conditionOverlay } from "./map";
 import { PARTS, esc, legendHtml, slots, swIcon, windChip, windIcon, windKey } from "./ui";
 import { HOUR, at, facesDeg, fetchSpotWind, nowS, obsTable, whenLabel, windState, type ObsFile, type Tone } from "./surf";
+import { cwaUrl, getCwa, loadStations } from "./data";
 
 type Payload = { id: string; name: string; lat: number; lon: number; wave: boolean; spots: { id: string; name: string; lat: number; lon: number; faces: string }[] };
 type Obs = { columns: string[]; rows: (string | number | null)[][] };
@@ -45,7 +46,19 @@ const PANELS: Panel[] = [
 export async function initBuoy(p: Payload) {
   // The hero map starts loading tiles while the data comes in.
   const hero = p.wave ? startHero(p) : null;
-  let obs: Obs = await fetch(`/data/obs/${p.id}.json`).then((r) => r.json());
+  // The station's archive size and status, from the live list.
+  loadStations().then((list) => {
+    const s = list.find((x) => x.id === p.id), l = s?.latest;
+    $("archive").textContent = l ? `${l.archiveRows.toLocaleString("en")} hourly rows since ${l.archiveStart.slice(0, 10)}` : "Empty";
+    if (s) $("status").textContent = s.active ? "Transmitting" : "Not transmitting (per O-B0076-001)";
+  }).catch(() => ($("archive").textContent = "Unavailable"));
+  let obs: Obs;
+  try {
+    obs = await getCwa<Obs>(`obs/${p.id}.json`);
+  } catch {
+    $("charts").innerHTML = `<p class="note">This station's readings are unavailable right now.</p>`;
+    return;
+  }
   const recent = obs;
   let t = obs.rows.map((r) => sec(String(r[0])));
   let fullLoaded = false;
@@ -56,7 +69,7 @@ export async function initBuoy(p: Payload) {
   // The JSON holds the last 120 days; the whole archive is the CSV.
   async function loadFull() {
     if (fullLoaded) return;
-    const text = await fetch(`/data/csv/${p.id}.csv`).then((r) => r.text());
+    const text = await fetch(cwaUrl(`csv/${p.id}.csv`)).then((r) => r.text());
     const [header, ...lines] = text.trim().split("\n");
     const columns = header.split(",");
     const rows = lines.map((l) => l.split(",").map((v, i) => (i === 0 || columns[i] === "source" ? v : v === "" ? null : Number(v))));

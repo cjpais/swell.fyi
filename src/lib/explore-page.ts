@@ -11,14 +11,12 @@ import { forecastStrip, type Readout } from "./forecast-strip";
 import { slots, tideAt } from "./ui";
 import { fmt, compass } from "./format";
 import { HOUR as H, facesDeg, hhmm, nowS, tideSeries, whenLabel, type Tide } from "./surf";
+import { isFresh, loadSpotTides, loadStations, type LiveStation, type SpotTide } from "./data";
 
-type SpotP = {
-  id: string; name: string; nameZh: string; region: string; lat: number; lon: number; faces: string;
-  tide: { name: string; events: [string, string, number | null][] } | null;
-};
+type SpotP = { id: string; name: string; nameZh: string; region: string; lat: number; lon: number; faces: string };
 type Payload = {
   spots: SpotP[];
-  buoys: { id: string; name: string; lat: number; lon: number; hs: number | null; time: string | null }[];
+  buoys: { id: string; name: string; lat: number; lon: number }[];
 };
 
 const LAST = "swell.lastSpot";
@@ -43,7 +41,10 @@ export async function initExplore(root: HTMLElement, p: Payload) {
     attribution: 'Waves, wind: <a href="https://open-meteo.com/">Open-Meteo</a> (MFWAM, ECMWF IFS) · Buoys, tides: CWA',
   });
   const mapReady = new Promise<void>((r) => map.once("load", () => r()));
-  const field: Field | null = await loadField();
+  const [field, tides, stations]: [Field | null, Record<string, SpotTide> | null, LiveStation[]] = await Promise.all([
+    loadField(), loadSpotTides(), loadStations().catch(() => [] as LiveStation[]),
+  ]);
+  const latest = new Map(stations.map((s) => [s.id, s.latest]));
   const problem = fieldProblem(field), warn = root.querySelector<HTMLElement>("#field-warn");
   if (warn) { warn.hidden = !problem; warn.textContent = problem ?? ""; }
   const T1 = nowH + 6 * 24 * H;
@@ -96,8 +97,9 @@ export async function initExplore(root: HTMLElement, p: Payload) {
   const buoyData = {
     type: "FeatureCollection" as const,
     features: p.buoys.map((s) => {
-      const ok = s.time != null && now - Date.parse(s.time) / 1000 < 3 * H && s.hs != null;
-      return { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [s.lon, s.lat] }, properties: { id: s.id, label: ok ? `${s.name} buoy ${fmt(s.hs)} m` : `${s.name} buoy`, ok } };
+      const l = latest.get(s.id), hs = l?.values.wave_height_m ?? null;
+      const ok = isFresh(l?.time, now) && hs != null;
+      return { type: "Feature" as const, geometry: { type: "Point" as const, coordinates: [s.lon, s.lat] }, properties: { id: s.id, label: ok ? `${s.name} buoy ${fmt(hs)} m` : `${s.name} buoy`, ok } };
     }),
   };
 
@@ -256,7 +258,8 @@ export async function initExplore(root: HTMLElement, p: Payload) {
     root.classList.toggle("has-spot", !!s);
     $("#pick").hidden = !!s;
     $("#spot").hidden = !s;
-    tide = s?.tide ? tideSeries(s.tide.events) : null;
+    const t = s ? tides?.[s.id] : null;
+    tide = t ? tideSeries(t.events) : null;
     pad();
     refreshStrip();
     paintTime();

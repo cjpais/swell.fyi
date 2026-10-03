@@ -1,40 +1,24 @@
 ---
+// Home. The structure is static; every number (CWA's forecast strips, buoy readings, wind)
+// loads in the browser from the swell-data Worker (see src/lib/home-page.ts).
 import Base from "../layouts/Base.astro";
-import { readStations, readRecreation, recentHs, isWaveStation } from "../lib/local";
+import { stationList, isWaveStation } from "../lib/local";
 import { SPOTS, REGIONS } from "../data/spots";
-import { fmt, compass } from "../lib/format";
-import { arrowSvg } from "../lib/glyphs";
-import { sparkline, strip, windKey } from "../lib/ui";
+import { windKey } from "../lib/ui";
 import { cleanName, cleanZh } from "../lib/surf";
 
-const stations = readStations();
+const stations = await stationList();
 const byId = new Map(stations.map((s) => [s.id, s]));
-const rec = readRecreation();
-const now = Date.now() / 1000;
-const H = 3600;
 
 // East coast, north to south. These are the buoys that matter for Yilan → Kenting.
 const EAST = ["46694A", "OAC005", "46708A", "46706A", "46699A", "46761F", "WRA007", "C6S94", "46759A"];
 const east = EAST.map((id) => byId.get(id)).filter((s) => s != null);
-const fresh = (t?: string) => t != null && now - Date.parse(t) / 1000 < 3 * H;
-const sparks = Object.fromEntries(east.map((s) => [s.id, recentHs(s.id, 72)]));
-const sparkMax = Math.max(1, ...Object.values(sparks).flat().map((p) => p[1] ?? 0));
-
-// CWA's recreation forecast at each spot: [unix s, Hs] every 3 h, from 3 h ago on.
-const cwaRows = (code: string): [number, number | null][] =>
-  (rec?.points[code]?.rows ?? []).map((r) => [Date.parse(r[0]) / 1000, r[1]] as [number, number | null]).filter(([t]) => t >= now - 3 * H);
-const rows = Object.fromEntries(SPOTS.map((s) => [s.id, cwaRows(s.cwaPoint)]));
-const yMax = Math.max(1.5, ...Object.values(rows).flat().map((r) => r[1] ?? 0));
-const peak = (id: string) => {
-  const next = rows[id].filter(([t]) => t <= now + 24 * H).map((r) => r[1]).filter((v) => v != null);
-  return next.length ? Math.max(...next) : null;
-};
-
 const waveStations = stations.filter(isWaveStation);
+
 const payload = {
-  yMax,
-  spots: SPOTS.map((s) => ({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, faces: s.faces, peak: peak(s.id), rows: rows[s.id] })),
-  stations: waveStations.map((s) => ({ id: s.id, name: cleanName(s.nameEn), lat: s.lat, lon: s.lon, hs: s.latest?.values.wave_height_m ?? null, tp: s.latest?.values.wave_period_s ?? null, dir: s.latest?.values.wave_dir_deg ?? null, time: s.latest?.time ?? null })),
+  spots: SPOTS.map((s) => ({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, faces: s.faces, cwaPoint: s.cwaPoint })),
+  stations: waveStations.map((s) => ({ id: s.id, name: cleanName(s.nameEn), lat: s.lat, lon: s.lon })),
+  east: east.map((s) => s.id),
 };
 ---
 <Base title="Taiwan Waves">
@@ -53,26 +37,23 @@ const payload = {
     <div class="spots-panel">
       <div class="panel-head"><h2>Surf spots</h2><Fragment set:html={windKey()} /></div>
       <p class="note">
-        Bars run 3 days, one per 3 hours: height is CWA's wave forecast (M-B0078-001, issued {rec?.issued.slice(0, 16).replace("T", " ")}), colour is ECMWF wind relative to the beach.
+        Bars run 3 days, one per 3 hours: height is CWA's wave forecast (M-B0078-001, <span id="issued">loading…</span>), colour is ECMWF wind relative to the beach.
       </p>
       <div class="regions">
         {REGIONS.map((region) => (
           <div class="region">
             <h3>{region}</h3>
             <ul>
-              {SPOTS.filter((s) => s.region === region).map((s) => {
-                const p = peak(s.id);
-                return (
-                  <li>
-                    <a class="spot-row" href={`/spots/${s.id}/`} data-spot={s.id}>
-                      <span class="nm"><span class="en">{s.name}</span> <span class="zh" lang="zh-Hant">{s.nameZh}</span></span>
-                      <span class="hs">{p != null ? <>{fmt(p)}<small>m</small></> : "–"}</span>
-                      <span class="wind-chip t-none" data-chip>Wind…</span>
-                      <span class="strip-wrap" data-strip set:html={strip(rows[s.id], () => "none", yMax)} />
-                    </a>
-                  </li>
-                );
-              })}
+              {SPOTS.filter((s) => s.region === region).map((s) => (
+                <li>
+                  <a class="spot-row" href={`/spots/${s.id}/`} data-spot={s.id}>
+                    <span class="nm"><span class="en">{s.name}</span> <span class="zh" lang="zh-Hant">{s.nameZh}</span></span>
+                    <span class="hs" data-peak>–</span>
+                    <span class="wind-chip t-none" data-chip>Wind…</span>
+                    <span class="strip-wrap" data-strip />
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
         ))}
@@ -86,22 +67,18 @@ const payload = {
       <p class="note">North to south. Measured by CWA every hour. The line is the last 72 hours, on one scale for every buoy.</p>
     </div>
     <ol class="buoy-list">
-      {east.map((s) => {
-        const v = s.latest?.values ?? {};
-        const ok = fresh(s.latest?.time);
-        return (
-          <li>
-            <a class={`buoy-row${ok ? "" : " stale"}`} href={`/buoys/${s.id}/`}>
-              <span class="nm"><span class="en">{cleanName(s.nameEn)}</span> <span class="zh" lang="zh-Hant">{cleanZh(s.name)}</span></span>
-              <span class="hs">{ok ? fmt(v.wave_height_m) : "–"}<small>m</small></span>
-              <span class="tp">{ok ? fmt(v.wave_period_s) : "–"}<small>s</small></span>
-              <span class="dir">{ok && <><Fragment set:html={arrowSvg(v.wave_dir_deg)} /><span>{compass(v.wave_dir_deg)}</span></>}</span>
-              <span class="sp" set:html={sparkline(sparks[s.id], sparkMax)} />
-              <span class="meta">{!s.latest ? "No data" : ok ? (v.sea_temp_c != null ? `${fmt(v.sea_temp_c)} °C water` : "") : `${Math.round((now - Date.parse(s.latest.time) / 1000) / H)} h old`}</span>
-            </a>
-          </li>
-        );
-      })}
+      {east.map((s) => (
+        <li>
+          <a class="buoy-row" href={`/buoys/${s.id}/`} data-buoy={s.id}>
+            <span class="nm"><span class="en">{cleanName(s.nameEn)}</span> <span class="zh" lang="zh-Hant">{cleanZh(s.name)}</span></span>
+            <span class="hs"><span data-v="hs">–</span><small>m</small></span>
+            <span class="tp"><span data-v="tp">–</span><small>s</small></span>
+            <span class="dir" data-v="dir"></span>
+            <span class="sp" data-v="spark"></span>
+            <span class="meta" data-v="meta">Loading…</span>
+          </a>
+        </li>
+      ))}
     </ol>
     <p class="more"><a href="/buoys/">All {waveStations.length} wave stations</a></p>
   </section>

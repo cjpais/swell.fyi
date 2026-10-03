@@ -3,20 +3,14 @@
 // opens around it, and the panel and the forecast bar follow it. The last spot you opened
 // is remembered in the browser.
 import Base from "../../layouts/Base.astro";
-import { readStations, nearestTide, isWaveStation } from "../../lib/local";
+// Tides, buoy readings and the forecast load live from the swell-data Worker.
+import { stationList, isWaveStation } from "../../lib/local";
 import { SPOTS, REGIONS } from "../../data/spots";
 import { cleanName } from "../../lib/surf";
 
-const stations = readStations();
-
-const spots = SPOTS.map((s) => {
-  const tide = nearestTide(s.lat, s.lon);
-  return {
-    id: s.id, name: s.name, nameZh: s.nameZh, region: s.region, lat: s.lat, lon: s.lon, faces: s.faces,
-    tide: tide ? { name: tide.name, events: tide.events } : null,
-  };
-});
-const buoys = stations.filter(isWaveStation).map((s) => ({ id: s.id, name: cleanName(s.nameEn), lat: s.lat, lon: s.lon, hs: s.latest?.values.wave_height_m ?? null, time: s.latest?.time ?? null }));
+const stations = await stationList();
+const spots = SPOTS.map((s) => ({ id: s.id, name: s.name, nameZh: s.nameZh, region: s.region, lat: s.lat, lon: s.lon, faces: s.faces }));
+const buoys = stations.filter(isWaveStation).map((s) => ({ id: s.id, name: cleanName(s.nameEn), lat: s.lat, lon: s.lon }));
 const short = (n: string) => n.replace(/ \(.*\)$/, "");
 ---
 <Base title="Map" description="Taiwan's surf spots, swell, wind and tide on one map." full>

@@ -1,12 +1,10 @@
 ---
 import "uplot/dist/uPlot.min.css";
 import "../styles/global.css";
-import { readMeta } from "../lib/local";
 
 interface Props { title: string; description?: string; full?: boolean }
 // `full`: the page fills the window under the masthead (explore map); no footer, no wrap.
 const { title, description = "Taiwan buoy observations, CWA forecasts and open wave models, side by side.", full = false } = Astro.props;
-const meta = readMeta();
 const path = Astro.url.pathname;
 const nav = [
   ["/", "Now"],
@@ -39,9 +37,7 @@ const nav = [
             <a href={href} aria-current={(href === "/" ? path === "/" || path.startsWith("/spots/") : path.startsWith(href)) ? "page" : undefined}>{label}</a>
           ))}
         </nav>
-        <p class="fresh" id="freshness" data-fetched={meta?.fetchedAt ?? ""}>
-          {meta ? <>CWA data fetched <time datetime={meta.fetchedAt}>{meta.fetchedAt}</time></> : "No CWA data yet. Run bun run fetch."}
-        </p>
+        <p class="fresh" id="freshness"></p>
       </div>
     </header>
     <main class={full ? "full-main" : "wrap"}>
@@ -57,13 +53,14 @@ const nav = [
     </footer>}
     <script>
       import { relTime } from "../lib/format";
-      const el = document.getElementById("freshness");
-      const t = el?.dataset.fetched;
-      if (el && t) {
-        const ageH = (Date.now() - Date.parse(t)) / 36e5;
-        el.textContent = `CWA data fetched ${relTime(t)}` + (ageH > 6 ? ". Run bun run fetch to refresh" : "");
-        if (ageH > 6) el.classList.add("stale");
-      }
+      import { loadMeta } from "../lib/data";
+      const el = document.getElementById("freshness")!;
+      loadMeta().then((m) => {
+        if (!m.fetchedAt) return;
+        const ageH = (Date.now() - Date.parse(m.fetchedAt)) / 36e5;
+        el.textContent = `Buoys updated ${relTime(m.fetchedAt)}`;
+        el.classList.toggle("stale", ageH > 3);
+      }).catch(() => { el.textContent = "Buoy data unavailable"; el.classList.add("stale"); });
     </script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 ---
 import Base from "../../layouts/Base.astro";
 import { SPOTS, type Spot } from "../../data/spots";
-import { readStations, readRecreation, nearestTide } from "../../lib/local";
+import { stationList } from "../../lib/local";
 import { km } from "../../lib/openmeteo";
 import { readoutShell, swIcon, windIcon, glyphKey } from "../../lib/ui";
 import { cleanName, compassWord, facesDeg } from "../../lib/surf";
@@ -10,10 +10,10 @@ export function getStaticPaths() {
   return SPOTS.map((spot) => ({ params: { id: spot.id }, props: { spot } }));
 }
 
+// The nearby buoys are built in; which one is working, its readings, CWA's forecast and the
+// tide all load live in the browser (src/lib/spot-page.ts).
 const { spot } = Astro.props as { spot: Spot };
-const stations = readStations();
-const rec = readRecreation();
-const point = rec?.points[spot.cwaPoint] ?? null;
+const stations = await stationList();
 const buoys = spot.buoys
   .map((id) => stations.find((s) => s.id === id))
   .filter((s) => s != null)
@@ -24,20 +24,9 @@ const buoys = spot.buoys
     lat: s.lat,
     lon: s.lon,
     km: km(spot.lat, spot.lon, s.lat, s.lon),
-    hs: s.latest?.values.wave_height_m ?? null,
-    time: s.latest?.time ?? null,
-    hasWaves: s.latest?.values.wave_height_m != null && Date.now() - Date.parse(s.latest.time) < 12 * 36e5,
   }));
-const buoy = buoys.find((b) => b.hasWaves) ?? null;
-const others = buoys.filter((b) => b.id !== buoy?.id);
-const tide = nearestTide(spot.lat, spot.lon);
 
-const payload = {
-  spot,
-  cwa: point ? { code: spot.cwaPoint, name: point.name, lat: point.lat, lon: point.lon, issued: rec!.issued, rows: point.rows } : null,
-  buoy,
-  tide: tide ? { name: tide.name, events: tide.events } : null,
-};
+const payload = { spot, buoys };
 ---
 <Base title={spot.name} description={`Wave forecast and buoy data for ${spot.name} (${spot.nameZh}), Taiwan.`}>
   <p class="crumb"><a href="/">Now</a> / {spot.region}</p>
@@ -45,8 +34,7 @@ const payload = {
     <h1 class="headline"><span class="en">{spot.name}</span> <span class="zh" lang="zh-Hant">{spot.nameZh}</span></h1>
     <p class="facts">
       The beach faces {compassWord(facesDeg(spot.faces))}.
-      {buoy && <> Nearest working buoy: <a href={`/buoys/${buoy.id}/`}>{buoy.name}</a>, {buoy.km.toFixed(0)} km away.</>}
-      {others.length > 0 && <> Also nearby: {others.map((b, i) => <>{i > 0 && ", "}<a href={`/buoys/${b.id}/`}>{b.name}</a></>)}.</>}
+      <span id="buoys">{buoys.length > 0 && <> Nearby buoys: {buoys.map((b, i) => <>{i > 0 && ", "}<a href={`/buoys/${b.id}/`}>{b.name}</a></>)}.</>}</span>
       {spot.notes && <> {spot.notes}</>}
     </p>
   </section>

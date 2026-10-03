@@ -14,21 +14,22 @@ See [RESEARCH.md](RESEARCH.md) (also served at `/research/`) for the full survey
 
 ```sh
 bun install
-bun run fetch:backfill   # first time: last 30 days of obs from CWA (~45 MB download)
 bun run dev              # http://localhost:4747 (map tiles come from https://tiles.swell.fyi)
 ```
 
-`bun run build` produces a static site in `dist/`. Spot pages load model forecasts live in the browser from Open-Meteo; the map page reads `field.json` from the `swell-data` Worker (see below). CWA data is whatever the last `fetch` wrote to `public/data/`. To work on the map offline, `bun run fetch:field` writes a local `public/data/field.json`; run the dev server with `PUBLIC_DATA_BASE=/data` to use it.
+The site is static and holds no readings. Every page loads its live data in the browser from the `swell-data` Worker at `https://data.swell.fyi` (buoys, tides, CWA's forecast, the map's model field), and spot and buoy pages also call Open-Meteo directly for the model comparisons. `bun run build` reads only the station list (names, IDs, positions), from the Worker, so a build needs no fetch first.
+
+To work offline against local files instead:
+
+```sh
+bun run fetch            # CWA data → public/data/cwa/ (and grows data/archive/)
+bun run fetch:field      # map field → public/data/field.json
+PUBLIC_DATA_BASE=/data bun run dev
+```
 
 ## Keep the archive growing
 
-CWA's live feed only covers 48 hours, so **run `bun run fetch` every 1–3 hours**. Every run appends to `data/archive/` and refreshes the site data. With cron:
-
-```cron
-15 */2 * * * cd /Users/cj/code/cjpais/taiwan-waves && ~/.bun/bin/bun run fetch >> data/fetch.log 2>&1
-```
-
-If you deploy the static build somewhere, run `bun run fetch && bun run build` on the schedule instead. Spot pages embed CWA's forecast at build time.
+CWA's live feed only covers 48 hours, so something has to run `bun run fetch` at least every day or so. In production that's `.github/workflows/refresh.yml`, every 3 hours (see below). The live site doesn't depend on it; only the long-term archive does.
 
 ### Two years of history
 
@@ -69,31 +70,44 @@ bun run bathymetry     # regenerate public/map/bathymetry.geojson (needs uv)
 |---|---|
 | Site | **https://swell.fyi**, a static Cloudflare Worker (`wrangler.jsonc`, assets only) |
 | Basemap + terrain | `https://tiles.swell.fyi`, the `swell-tiles` Worker (`workers/tiles`) over R2 bucket `taiwan-waves` |
-| Map forecast | `https://data.swell.fyi/field.json`, the `swell-data` Worker (`workers/data`), stored in R2 at `data/field.json`. `/status` shows when it was built |
+| Live data | `https://data.swell.fyi`, the `swell-data` Worker (`workers/data`) over R2: `field.json` (map forecast) and `cwa/*` (buoys, tides, CWA forecast, archive CSVs). `/status` shows when each was built |
 | Archive | `taiwan-waves/archive/cwa-archive.tar.gz` in R2, plus `archive/daily/YYYY-MM-DD.tar.gz` copies (expire after 90 days) |
 
-`.github/workflows/refresh.yml` runs hourly. It pulls the archive from R2, runs `fetch`, pushes the archive back, then builds and deploys. `scripts/archive-sync.sh push` refuses to upload an archive with fewer rows than it pulled, so a broken run can't erase history. The workflow needs these repo secrets:
+Two workflows:
+
+- **`deploy.yml`** builds and deploys the site on every push to `main`. That's the only reason the site redeploys; data changes never need one.
+- **`refresh.yml`** grows the archive every 3 hours: it pulls the archive from R2, runs `fetch`, pushes the archive back, then runs `scripts/publish-archive.sh` to upload each station's CSV and `archive-index.json` for the Worker to serve. `scripts/archive-sync.sh push` refuses to upload an archive with fewer rows than it pulled, so a broken run can't erase history. GitHub's schedule is best-effort; a late run is fine, as long as one lands every day or so.
+
+Both need these repo secrets:
 
 - `CLOUDFLARE_API_TOKEN`: create from the **"Edit Cloudflare Workers"** template (Workers Scripts, Routes and R2 edit), limited to this account and the `swell.fyi` zone
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CWA_API_KEY` (optional)
 
-Manual deploy from a laptop: `scripts/archive-sync.sh pull && bun run fetch && scripts/archive-sync.sh push && bun run build && npx wrangler deploy`.
+Manual site deploy from a laptop: `bun run build && npx wrangler deploy`. Manual archive run: `scripts/archive-sync.sh pull && bun run fetch && scripts/archive-sync.sh push && scripts/publish-archive.sh`.
 
 The scripts read `SWELL_R2_BUCKET`, `TILES_BUILD` and `TILES_MAXZOOM`, deliberately not a generic `R2_BUCKET`, so a variable set for another project can't redirect uploads.
 
-### Map forecast (`swell-data` Worker)
+### Live data (`swell-data` Worker)
 
-The map page's waves and wind come from `field.json`: a 0.5° wave + wind grid and per-spot MFWAM / ECMWF IFS series, about 350 Open-Meteo calls per build. A cron runs every 30 minutes, reads Open-Meteo's model metadata (cheap) and rebuilds only when MFWAM or ECMWF IFS has published a new run, or the file is over 6 h old. That's about 6 builds and roughly 2k calls a day, well under the free tier's 10k. The result is stored in R2 and served through the edge cache, so visitor traffic never reaches Open-Meteo. It's independent of the site build: new forecasts show up without a redeploy.
+A cron runs every 10 minutes. Each part checks cheaply whether its upstream changed and only rebuilds when it has; everything lands in R2 and is served through the edge cache (5 min), so visitor traffic never reaches CWA or Open-Meteo.
+
+- **Map forecast, `field.json`:** a 0.5° wave + wind grid and per-spot MFWAM / ECMWF IFS series, about 350 Open-Meteo calls per build. It rebuilds when Open-Meteo's model metadata shows a new MFWAM or ECMWF IFS run, or the file is over 6 h old: about 6 builds and roughly 2k calls a day, under the free tier's 10k.
+- **CWA, `cwa/*`:** it HEADs CWA's four S3 files (buoy obs, stations, recreation forecast, tides) and re-derives only the ones whose ETag changed, usually the hourly obs file. Each station's last 120 days (`cwa/obs/{id}.json`) are kept by merging every new 48 h file in; the station list (`stations.json`), the home page sparklines (`recent-hs.json`), and per-spot slices of the forecast and tides (`spot-forecast.json`, `spot-tides.json`) are derived from them. The parsing lives in `scripts/lib/cwa.ts`, shared with `bun run fetch`.
+- **Archive CSVs, `cwa/csv/*` and `cwa/archive-index.json`:** uploaded by `refresh.yml`, not the Worker. The Worker only reads the index, to show each station's archive size.
 
 ```sh
 bun run deploy:data                                                  # deploy the Worker (and its cron)
-npx wrangler tail swell-data                                         # watch builds
-curl -X POST -H "Authorization: Bearer $(cat ~/.config/swell/refresh-token)" "https://data.swell.fyi/refresh?force=1"   # rebuild now
+npx wrangler tail swell-data                                         # watch runs
+curl https://data.swell.fyi/status                                   # when each part was last built
+curl -X POST -H "Authorization: Bearer $(cat ~/.config/swell/refresh-token)" "https://data.swell.fyi/refresh?force=1"   # rebuild now (&only=field|cwa)
 npx wrangler secret put OPEN_METEO_API_KEY -c workers/data/wrangler.jsonc   # optional, commercial plan
+npx wrangler secret put CWA_API_KEY -c workers/data/wrangler.jsonc          # optional
 ```
 
-A build uses about 100 ms of CPU, which is over the Workers Free plan's 10 ms per invocation, so this needs Workers Paid. If the file is missing or over 12 h old, the map says so instead of showing blanks.
+After a history backfill (or to rebuild the 120-day windows from scratch), run `bun run fetch && scripts/publish-archive.sh --windows`.
+
+A full CWA refresh takes about 750 ms of CPU and a map build about 100 ms, both over the Workers Free plan's 10 ms, so this needs Workers Paid. If data is missing or old, pages say so instead of showing blanks.
 
 ## CWA API key (optional)
 
@@ -109,18 +123,21 @@ A key also unlocks the REST datastore, which filters by station, element and tim
 
 | Path | What |
 |---|---|
-| `scripts/fetch-cwa.ts` | Downloads O-B0075-001/-002 (obs), O-B0076-001 (stations), M-B0078-001 (recreation forecast) and F-A0021-001 (tides), then archives and publishes them |
+| `scripts/fetch-cwa.ts` | Downloads O-B0075-001/-002 (obs), O-B0076-001 (stations), M-B0078-001 (recreation forecast) and F-A0021-001 (tides), grows the archive and writes a local snapshot to `public/data/cwa/` |
+| `scripts/lib/cwa.ts` | CWA download, parsing and the derived JSON, shared by `fetch-cwa.ts` and the Worker |
+| `scripts/publish-archive.sh` | Uploads the archive CSVs (and with `--windows`, the 120-day windows) to R2 |
 | `scripts/backfill-ocean.ts` | ~2-year history backfill from the ocean portal |
 | `scripts/lib/archive.ts` | Archive CSV format and merge rules |
 | `data/archive/cwa-obs/{station}.csv` | **The long-term record.** Hourly, one file per station |
 | `data/archive/cwa-recreation-forecast/{point}.csv` | Every CWA forecast issue for the spot points, with lead time, for scoring CWA later |
-| `public/data/` | What the site reads: generated, safe to delete and re-fetch |
+| `public/data/` | Local snapshot for offline work (`PUBLIC_DATA_BASE=/data`): generated, safe to delete and re-fetch |
+| `src/lib/data.ts` | Where the browser loads live data from, and its types |
 | `src/data/spots.ts` | Surf spots: coordinates, CWA forecast point, reference buoys. Add spots here |
 | `src/lib/openmeteo.ts` | Model list and Open-Meteo requests |
 | `src/lib/map.ts` | MapLibre map: Protomaps style, depth layers, markers |
 | `scripts/tiles.sh`, `scripts/tiles-upload.sh`, `scripts/bathymetry.py` | Build/upload the basemap and the depth contours |
 | `workers/tiles` | Tile server Worker (basemap + terrain, edge-cached) |
-| `workers/data`, `scripts/lib/field.ts` | Map forecast Worker and the field build it shares with `fetch:field` |
+| `workers/data`, `scripts/lib/field.ts` | Live data Worker (map forecast and CWA), and the field build it shares with `fetch:field` |
 
 Archive columns: `time` (ISO, +08:00), `wave_height_m` (Hs), `wave_dir_deg` (from), `wave_period_s` (mean period, not peak), `sea_temp_c`, `air_temp_c`, `pressure_hpa`, `wind_speed_ms`, `wind_dir_deg` (from), `wind_gust_ms`, `tide_height_m` (TWVD2001), `current_dir_deg` (toward), `current_speed_ms`, `source`.
 

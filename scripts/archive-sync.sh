@@ -30,7 +30,7 @@ case "${1:-}" in
       echo "refusing to push: archive shrank from $before to $now rows" >&2
       exit 1
     fi
-    tar -czf "$TMP" -C data archive
+    COPYFILE_DISABLE=1 tar -czf "$TMP" --exclude "._*" -C data archive  # no macOS ._ metadata files
     wr put "$BUCKET/$KEY" --file "$TMP" --content-type application/gzip
     wr put "$BUCKET/archive/daily/$(date -u +%F).tar.gz" --file "$TMP" --content-type application/gzip
     echo "pushed archive: $now rows ($(du -h "$TMP" | cut -f1))"

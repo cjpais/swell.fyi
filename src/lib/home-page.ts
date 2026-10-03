@@ -1,31 +1,74 @@
-// Home page in the browser: the overview map, then the wind at every spot (one Open-Meteo
-// request) to colour the strips, chips and callouts. The lists themselves are built at build time.
+// Home page in the browser: CWA's forecast strips and the buoy readings (swell-data Worker),
+// the overview map, then the wind at every spot (one Open-Meteo request) to colour the strips,
+// chips and callouts. The page structure is built at build time.
 import { createMap, marker, spotCallouts } from "./map";
 import { arrowSvg } from "./glyphs";
-import { esc, strip } from "./ui";
+import { esc, strip, sparkline } from "./ui";
 import { fmt, compass } from "./format";
-import { at, facesDeg, fetchManyWind, windState, nowS } from "./surf";
+import { HOUR as H, at, facesDeg, fetchManyWind, windState, nowS, type Tone } from "./surf";
+import { isFresh, loadRecentHs, loadSpotForecast, loadStations, type LiveStation } from "./data";
 
 type Payload = {
-  yMax: number;
-  spots: { id: string; name: string; lat: number; lon: number; faces: string; peak: number | null; rows: [number, number | null][] }[];
-  stations: { id: string; name: string; lat: number; lon: number; hs: number | null; tp: number | null; dir: number | null; time: string | null }[];
+  spots: { id: string; name: string; lat: number; lon: number; faces: string; cwaPoint: string }[];
+  stations: { id: string; name: string; lat: number; lon: number }[];
+  east: string[];
 };
 
 const $ = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector<T>(sel);
 
 export async function initHome(p: Payload) {
   const now = nowS();
+  const windsReq = fetchManyWind(p.spots.map((s) => [s.lat, s.lon])).catch(() => null);
+  const [stations, rec, sparks] = await Promise.all([loadStations().catch(() => [] as LiveStation[]), loadSpotForecast(), loadRecentHs()]);
+  const live = new Map(stations.map((s) => [s.id, s]));
+
+  // ---------- CWA's forecast per spot: [unix s, Hs] every 3 h, from 3 h ago on ----------
+  const rows = Object.fromEntries(p.spots.map((s) => [s.id, (rec?.points[s.cwaPoint]?.rows ?? []).map((r) => [Date.parse(r[0]) / 1000, r[1]] as [number, number | null]).filter(([t]) => t >= now - 3 * H)]));
+  const yMax = Math.max(1.5, ...Object.values(rows).flat().map((r) => r[1] ?? 0));
+  const peak = (id: string) => {
+    const next = rows[id].filter(([t]) => t <= now + 24 * H).map((r) => r[1]).filter((v): v is number => v != null);
+    return next.length ? Math.max(...next) : null;
+  };
+  $("#issued")!.textContent = rec ? `issued ${rec.issued.slice(0, 16).replace("T", " ")}` : "unavailable right now";
+  const paintStrips = (toneFor: (id: string) => (ts: number) => Tone) => {
+    for (const s of p.spots) {
+      const row = $(`[data-spot="${s.id}"]`);
+      if (row) $("[data-strip]", row)!.innerHTML = strip(rows[s.id], toneFor(s.id), yMax);
+    }
+  };
+  for (const s of p.spots) {
+    const pk = peak(s.id), el = $(`[data-spot="${s.id}"] [data-peak]`);
+    if (el) el.innerHTML = pk != null ? `${fmt(pk)}<small>m</small>` : "–";
+  }
+  paintStrips(() => () => "none");
+
+  // ---------- east coast buoys ----------
+  const sparkMax = Math.max(1, ...p.east.flatMap((id) => (sparks?.[id] ?? []).map((x) => x[1] ?? 0)));
+  for (const id of p.east) {
+    const row = $(`[data-buoy="${id}"]`);
+    if (!row) continue;
+    const s = live.get(id), l = s?.latest, v = l?.values ?? {}, ok = isFresh(l?.time, now);
+    const set = (k: string, html: string) => ($(`[data-v="${k}"]`, row)!.innerHTML = html);
+    row.classList.toggle("stale", !ok);
+    set("hs", ok ? fmt(v.wave_height_m) : "–");
+    set("tp", ok ? fmt(v.wave_period_s) : "–");
+    set("dir", ok ? `${arrowSvg(v.wave_dir_deg)}<span>${compass(v.wave_dir_deg)}</span>` : "");
+    set("spark", sparkline(sparks?.[id] ?? [], sparkMax));
+    set("meta", !l ? "No data" : ok ? (v.sea_temp_c != null ? `${fmt(v.sea_temp_c)} °C water` : "") : `${Math.round((now - Date.parse(l.time) / 1000) / H)} h old`);
+  }
+
+  // ---------- map ----------
   // Narrow maps zoom out so the callouts pushed out to sea still fit.
   const narrow = $("#map")!.clientWidth < 600;
   const map = createMap($("#map")!, { center: narrow ? [120.95, 23.65] : [120.95, 23.6], zoom: narrow ? 5.8 : 6.55 });
 
   // Buoys as small measured tags; stale ones shrink to a grey dot.
   map.on("load", () => {
-    for (const s of p.stations) {
-      const ok = s.time != null && now - Date.parse(s.time) / 1000 < 3 * 3600 && s.hs != null;
-      const el = marker(map, [s.lon, s.lat], `<span>${ok ? fmt(s.hs) : ""}</span>${ok ? arrowSvg(s.dir, 11) : ""}`, `buoy-dot${ok ? "" : " stale"}`, `/buoys/${s.id}/`);
-      el.title = `${s.name}: ${ok ? `${fmt(s.hs)} m, ${fmt(s.tp)} s from ${compass(s.dir)}` : "no current reading"}`;
+    for (const st of p.stations) {
+      const v = live.get(st.id)?.latest, hs = v?.values.wave_height_m ?? null;
+      const ok = isFresh(v?.time, now) && hs != null;
+      const el = marker(map, [st.lon, st.lat], `<span>${ok ? fmt(hs) : ""}</span>${ok ? arrowSvg(v!.values.wave_dir_deg, 11) : ""}`, `buoy-dot${ok ? "" : " stale"}`, `/buoys/${st.id}/`);
+      el.title = `${st.name}: ${ok ? `${fmt(hs)} m, ${fmt(v!.values.wave_period_s)} s from ${compass(v!.values.wave_dir_deg)}` : "no current reading"}`;
     }
   });
 
@@ -34,28 +77,27 @@ export async function initHome(p: Payload) {
     id: s.id, lat: s.lat, lon: s.lon,
     side: s.lon < 120.8 ? "west" : "east",
     href: `/spots/${s.id}/`,
-    html: `<span class="co-name">${esc(s.name.replace(/ \(.*\)$/, "").replace(/ \/ .*/, ""))}</span><span class="co-val">${fmt(s.peak)}</span><i class="co-tone t-none" data-tone="${s.id}"></i>`,
+    html: `<span class="co-name">${esc(s.name.replace(/ \(.*\)$/, "").replace(/ \/ .*/, ""))}</span><span class="co-val">${fmt(peak(s.id))}</span><i class="co-tone t-none" data-tone="${s.id}"></i>`,
   })));
 
-  try {
-    const winds = await fetchManyWind(p.spots.map((s) => [s.lat, s.lon]));
+  // ---------- wind: colours the strips, chips and callouts ----------
+  const winds = await windsReq;
+  if (!winds) {
+    document.querySelectorAll("[data-chip]").forEach((c) => (c.textContent = "Wind unavailable"));
+  } else {
+    const stateAt = (i: number) => {
+      const w = winds[i], faces = facesDeg(p.spots[i].faces);
+      return (ts: number) => windState(at(w?.time, w?.wind_direction_10m, ts), at(w?.time, w?.wind_speed_10m, ts), faces);
+    };
+    paintStrips((id) => { const f = stateAt(p.spots.findIndex((s) => s.id === id)); return (ts) => f(ts).tone; });
     p.spots.forEach((s, i) => {
-      const w = winds[i];
-      if (!w) return;
-      const faces = facesDeg(s.faces);
-      const stateAt = (ts: number) => windState(at(w.time, w.wind_direction_10m, ts), at(w.time, w.wind_speed_10m, ts), faces);
-      const row = $(`[data-spot="${s.id}"]`);
-      if (!row) return;
-      $("[data-strip]", row)!.innerHTML = strip(s.rows, (ts) => stateAt(ts).tone, p.yMax);
-      const ws = stateAt(now);
-      const chip = $("[data-chip]", row)!;
-      chip.className = `wind-chip t-${ws.tone}`;
-      chip.textContent = ws.label;
+      if (!winds[i]) return;
+      const ws = stateAt(i)(now);
+      const chip = $(`[data-spot="${s.id}"] [data-chip]`);
+      if (chip) { chip.className = `wind-chip t-${ws.tone}`; chip.textContent = ws.label; }
       const tone = $(`[data-tone="${s.id}"]`);
       if (tone) { tone.className = `co-tone t-${ws.tone}`; tone.title = `Wind now: ${ws.label}`; }
     });
-  } catch {
-    document.querySelectorAll("[data-chip]").forEach((c) => (c.textContent = "Wind unavailable"));
   }
   callouts.layout();
 }
