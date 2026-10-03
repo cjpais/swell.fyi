@@ -18,7 +18,7 @@ bun run fetch:backfill   # first time: last 30 days of obs from CWA (~45 MB down
 bun run dev              # http://localhost:4747 (map tiles come from https://tiles.swell.fyi)
 ```
 
-`bun run build` produces a static site in `dist/`. Model forecasts load live in the browser from Open-Meteo. CWA data is whatever the last `fetch` wrote to `public/data/`.
+`bun run build` produces a static site in `dist/`. Spot pages load model forecasts live in the browser from Open-Meteo; the map page reads `field.json` from the `swell-data` Worker (see below). CWA data is whatever the last `fetch` wrote to `public/data/`. To work on the map offline, `bun run fetch:field` writes a local `public/data/field.json`; run the dev server with `PUBLIC_DATA_BASE=/data` to use it.
 
 ## Keep the archive growing
 
@@ -69,6 +69,7 @@ bun run bathymetry     # regenerate public/map/bathymetry.geojson (needs uv)
 |---|---|
 | Site | **https://swell.fyi**, a static Cloudflare Worker (`wrangler.jsonc`, assets only) |
 | Basemap + terrain | `https://tiles.swell.fyi`, the `swell-tiles` Worker (`workers/tiles`) over R2 bucket `taiwan-waves` |
+| Map forecast | `https://data.swell.fyi/field.json`, the `swell-data` Worker (`workers/data`), stored in R2 at `data/field.json`. `/status` shows when it was built |
 | Archive | `taiwan-waves/archive/cwa-archive.tar.gz` in R2, plus `archive/daily/YYYY-MM-DD.tar.gz` copies (expire after 90 days) |
 
 `.github/workflows/refresh.yml` runs hourly. It pulls the archive from R2, runs `fetch`, pushes the archive back, then builds and deploys. `scripts/archive-sync.sh push` refuses to upload an archive with fewer rows than it pulled, so a broken run can't erase history. The workflow needs these repo secrets:
@@ -80,6 +81,19 @@ bun run bathymetry     # regenerate public/map/bathymetry.geojson (needs uv)
 Manual deploy from a laptop: `scripts/archive-sync.sh pull && bun run fetch && scripts/archive-sync.sh push && bun run build && npx wrangler deploy`.
 
 The scripts read `SWELL_R2_BUCKET`, `TILES_BUILD` and `TILES_MAXZOOM`, deliberately not a generic `R2_BUCKET`, so a variable set for another project can't redirect uploads.
+
+### Map forecast (`swell-data` Worker)
+
+The map page's waves and wind come from `field.json`: a 0.5° wave + wind grid and per-spot MFWAM / ECMWF IFS series, about 350 Open-Meteo calls per build. A cron runs every 30 minutes, reads Open-Meteo's model metadata (cheap) and rebuilds only when MFWAM or ECMWF IFS has published a new run, or the file is over 6 h old. That's about 6 builds and roughly 2k calls a day, well under the free tier's 10k. The result is stored in R2 and served through the edge cache, so visitor traffic never reaches Open-Meteo. It's independent of the site build: new forecasts show up without a redeploy.
+
+```sh
+bun run deploy:data                                                  # deploy the Worker (and its cron)
+npx wrangler tail swell-data                                         # watch builds
+curl -X POST -H "Authorization: Bearer $(cat ~/.config/swell/refresh-token)" "https://data.swell.fyi/refresh?force=1"   # rebuild now
+npx wrangler secret put OPEN_METEO_API_KEY -c workers/data/wrangler.jsonc   # optional, commercial plan
+```
+
+A build uses about 100 ms of CPU, which is over the Workers Free plan's 10 ms per invocation, so this needs Workers Paid. If the file is missing or over 12 h old, the map says so instead of showing blanks.
 
 ## CWA API key (optional)
 
@@ -106,6 +120,7 @@ A key also unlocks the REST datastore, which filters by station, element and tim
 | `src/lib/map.ts` | MapLibre map: Protomaps style, depth layers, markers |
 | `scripts/tiles.sh`, `scripts/tiles-upload.sh`, `scripts/bathymetry.py` | Build/upload the basemap and the depth contours |
 | `workers/tiles` | Tile server Worker (basemap + terrain, edge-cached) |
+| `workers/data`, `scripts/lib/field.ts` | Map forecast Worker and the field build it shares with `fetch:field` |
 
 Archive columns: `time` (ISO, +08:00), `wave_height_m` (Hs), `wave_dir_deg` (from), `wave_period_s` (mean period, not peak), `sea_temp_c`, `air_temp_c`, `pressure_hpa`, `wind_speed_ms`, `wind_dir_deg` (from), `wind_gust_ms`, `tide_height_m` (TWVD2001), `current_dir_deg` (toward), `current_speed_ms`, `source`.
 

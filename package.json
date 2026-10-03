@@ -17,7 +17,8 @@
     "tiles": "bash scripts/tiles.sh",
     "bathymetry": "uv run scripts/bathymetry.py",
     "tiles:upload": "bash scripts/tiles-upload.sh",
-    "deploy:tiles": "wrangler deploy -c workers/tiles/wrangler.jsonc"
+    "deploy:tiles": "wrangler deploy -c workers/tiles/wrangler.jsonc",
+    "deploy:data": "wrangler deploy -c workers/data/wrangler.jsonc"
   },
   "dependencies": {
     "@protomaps/basemaps": "^5.7.2",

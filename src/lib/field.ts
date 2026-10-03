@@ -1,4 +1,4 @@
-// The wave + wind field around Taiwan (public/data/field.json, from scripts/fetch-field.ts),
+// The wave + wind field around Taiwan (field.json, built by the swell-data Worker in workers/data),
 // drawn on the explore map as a stepped heatmap: flat ink bands in a MapLibre image layer
 // under the land, so the coastline masks it for free. Static: it redraws only when the hour does.
 import type { Map as MlMap, ImageSource } from "maplibre-gl";
@@ -17,11 +17,23 @@ export type FieldSpot = {
 };
 export type Field = { fetchedAt: string; models: { wave: string; wind: string }; grid: FieldGrid; spots: Record<string, FieldSpot> };
 
+// Served by workers/data. PUBLIC_DATA_BASE=/data reads a local copy from `bun run fetch:field`.
+const DATA = (import.meta.env.PUBLIC_DATA_BASE || "https://data.swell.fyi").replace(/\/$/, "");
+/** Past this, the forecast is flagged as old. The Worker rebuilds at least every 6 h. */
+export const FIELD_STALE_H = 12;
+
 export async function loadField(): Promise<Field | null> {
   try {
-    const r = await fetch("/data/field.json");
+    const r = await fetch(`${DATA}/field.json`);
     return r.ok ? ((await r.json()) as Field) : null;
   } catch { return null; }
+}
+
+/** A line for the panel when the forecast is missing or old, else null. */
+export function fieldProblem(f: Field | null): string | null {
+  if (!f) return "Forecast unavailable right now. Spot pages still load it directly.";
+  const ageH = (Date.now() - Date.parse(f.fetchedAt)) / 36e5;
+  return ageH > FIELD_STALE_H ? `Forecast is ${Math.round(ageH)} h old.` : null;
 }
 
 // ---------- layers and their ink bands ----------

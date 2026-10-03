@@ -4,7 +4,7 @@
 // Written as a mountable module so the home page can use it later.
 import type { GeoJSONSource, MapGeoJSONFeature, SymbolLayerSpecification } from "maplibre-gl";
 import { createMap } from "./map";
-import { loadField, type Field } from "./field";
+import { loadField, fieldProblem, type Field } from "./field";
 import { makeConditions, type SeaSeries, type WindSeries } from "./conditions";
 import { renderCompass, type RoseTag } from "./compass";
 import { forecastStrip, type Readout } from "./forecast-strip";
@@ -44,6 +44,8 @@ export async function initExplore(root: HTMLElement, p: Payload) {
   });
   const mapReady = new Promise<void>((r) => map.once("load", () => r()));
   const field: Field | null = await loadField();
+  const problem = fieldProblem(field), warn = root.querySelector<HTMLElement>("#field-warn");
+  if (warn) { warn.hidden = !problem; warn.textContent = problem ?? ""; }
   const T1 = nowH + 6 * 24 * H;
   const spotsById = new Map(p.spots.map((s) => [s.id, s]));
 

@@ -28,6 +28,7 @@ const short = (n: string) => n.replace(/ \(.*\)$/, "");
       <aside class="ex-card" id="card" aria-live="polite">
         <div class="ec-pick" id="pick">
           <p class="ec-kicker">Surf spots <span class="faint">· wave height and wind</span></p>
+          <p class="ec-warn" id="field-warn" role="status" hidden></p>
           {REGIONS.map((r) => (
             <section class="ec-region">
               <h3>{r}</h3>

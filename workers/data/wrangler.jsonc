@@ -1,0 +1,16 @@
+{
+  // Model data for swell.fyi: rebuilds the explore map's field.json from Open-Meteo on a cron,
+  // keeps it in R2 and serves it from the edge. Deploy: bun run deploy:data
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "swell-data",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "taiwan-waves" }],
+  "routes": [{ "pattern": "data.swell.fyi", "custom_domain": true }],
+  "workers_dev": false,
+  // Every 30 min: a cheap check of Open-Meteo's model metadata. It only rebuilds (~350
+  // Open-Meteo calls) when MFWAM or ECMWF IFS has published a new run.
+  "triggers": { "crons": ["*/30 * * * *"] },
+  "observability": { "enabled": true }
+  // Optional secret, for a commercial Open-Meteo plan: npx wrangler secret put OPEN_METEO_API_KEY -c workers/data/wrangler.jsonc
+}
