@@ -5,6 +5,8 @@
 
 export type RoseSwell = { dir: number | null; h: number | null; cls: string; blocked?: boolean };
 export type RoseWind = { dir: number | null; speed: number | null } | null;
+/** A text label outside the ring at a bearing, e.g. "Swell 0.9 m · 6 s" by its arrow. */
+export type RoseTag = { dir: number; text: string; cls: string };
 
 const R = 88;
 const rad = (d: number) => (d * Math.PI) / 180;
@@ -54,7 +56,7 @@ function barbs(bearing: number, ms: number) {
   return out;
 }
 
-export function renderCompass(el: Element, o: { faces?: number | null; swells?: RoseSwell[]; wind?: RoseWind; label?: string }) {
+export function renderCompass(el: Element, o: { faces?: number | null; swells?: RoseSwell[]; wind?: RoseWind; label?: string; tags?: RoseTag[] }) {
   const s: string[] = [];
   const css = getComputedStyle(document.documentElement);
   s.push(`<circle class="c-face" r="${R}"/>`);
@@ -95,5 +97,17 @@ export function renderCompass(el: Element, o: { faces?: number | null; swells?: 
     s.push(`<path class="c-wind-casing" d="${d}"/><g class="c-wind"><path d="${d}"/></g>`);
   }
   s.push(`<circle class="c-hub" r="3.5"/>`);
+  // Tags sit outside the ring by their arrow's tail, nudged apart if two bearings are close.
+  const placed: { x0: number; x1: number; y: number }[] = [];
+  for (const t of o.tags ?? []) {
+    const [x] = pt(t.dir, R + 26);
+    let [, y] = pt(t.dir, R + 26);
+    const anchor = x > 14 ? "start" : x < -14 ? "end" : "middle";
+    const w = t.text.length * 6.3;
+    const x0 = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
+    for (let n = 0; n < 6 && placed.some((p) => Math.abs(p.y - y) < 14 && x0 < p.x1 && x0 + w > p.x0); n++) y += y < 0 ? -14 : 14;
+    placed.push({ x0, x1: x0 + w, y });
+    s.push(`<text class="c-tag ${t.cls}" x="${f(x)}" y="${f(y)}" dy="0.35em" text-anchor="${anchor}">${t.text}</text>`);
+  }
   el.innerHTML = `<svg viewBox="-110 -110 220 220" role="img" aria-label="${o.label ?? "Compass"}">${s.join("")}</svg>`;
 }
