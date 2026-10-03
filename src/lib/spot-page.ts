@@ -4,10 +4,11 @@ import { fetchMarine, fetchWind, partitioned, WAVE_MODELS, WIND_MODELS, km, type
 import { toCsv, downloadText } from "./csv";
 import { fmt, compass } from "./format";
 import { renderCompass } from "./compass";
-import { renderTimeline, type Row } from "./timeline";
+import { renderTimeline } from "./timeline";
+import { makeConditions, roseSwells, swellNote, timelineRows } from "./conditions";
 import { createMap, marker, conditionOverlay } from "./map";
 import { PARTS, esc, legendHtml, slots, swIcon, tideAt, windChip, windIcon, windKey } from "./ui";
-import { HOUR as H, at, facesDeg, fetchSST, fetchSpotWind, hhmm, nowS, obsTable, swellExposure, tideSeries, whenLabel, windState, type ObsFile, type Wind } from "./surf";
+import { HOUR as H, at, facesDeg, fetchSST, fetchSpotWind, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile, type Wind } from "./surf";
 
 type Payload = {
   spot: { id: string; name: string; lat: number; lon: number; model: [number, number]; faces: string };
@@ -44,29 +45,8 @@ export async function initSpot(p: Payload) {
   const obsHs = obs?.col("wave_height_m") ?? [];
   const lastObs = obs ? obs.t.findLast((_, i) => obsHs[i] != null) ?? null : null;
 
-  const conditions = (ts: number) => {
-    const parts = PARTS.map((pt) => {
-      const h = sea ? at(sea.time, sea.get(`${pt.key}_height`), ts) : null, dir = sea ? at(sea.time, sea.get(`${pt.key}_direction`), ts) : null;
-      const exposure = swellExposure(dir, faces);
-      return { ...pt, h, dir, period: sea ? at(sea.time, sea.get(`${pt.key}_period`), ts) : null, exposure, blocked: exposure === "blocked" };
-    });
-    let w = null;
-    if (wind) {
-      const dir = at(wind.time, wind.wind_direction_10m, ts), speed = at(wind.time, wind.wind_speed_10m, ts);
-      w = { dir, speed, gust: at(wind.time, wind.wind_gusts_10m, ts), ...windState(dir, speed, faces) };
-    }
-    return { parts, w, hs: sea ? at(sea.time, sea.get("wave_height"), ts) : null };
-  };
-  type Parts = ReturnType<typeof conditions>["parts"];
-  // The model's number is open-ocean sea state. When the swell can't reach the beach, say so.
-  const note = (parts: Parts) => {
-    const big = parts.filter((x) => x.h != null && x.h >= 0.2);
-    if (!big.length) return "";
-    if (big.every((x) => x.blocked)) return "Swell is blocked here. Expect much smaller surf.";
-    if (big.every((x) => x.blocked || x.exposure === "wrapping")) return "Swell only wraps in. Expect smaller surf.";
-    return "";
-  };
-  const roseSwells = (parts: Parts) => parts.map((x) => ({ dir: x.dir, h: x.h, period: x.period, cls: x.cls, name: x.name, blocked: x.blocked }));
+  const conditions = makeConditions(sea, wind, faces);
+  const note = swellNote;
 
   function show(tsIn: number | null) {
     const ts = tsIn ?? Math.round(now / H) * H;
@@ -118,13 +98,7 @@ export async function initSpot(p: Payload) {
     ...(obs ? [["tl-obs", `${buoyName} buoy, measured`, "dot"] as [string, string, string]] : []),
   ]) + windKey(true);
 
-  const rows: Row[] = [];
-  if (sea) {
-    rows.push({ kind: "height", label: "Wave height", h: 168, total: { t: sea.time, v: sea.get("wave_height") }, parts: PARTS.map((x) => ({ t: sea.time, v: sea.get(`${x.key}_height`), cls: x.cls })), obs: obs ? { t: obs.t, v: obsHs } : null });
-    rows.push({ kind: "arrows", label: "Swell direction", h: 52, series: PARTS.map((x) => ({ t: sea.time, dir: sea.get(`${x.key}_direction`), h: sea.get(`${x.key}_height`), cls: x.cls, short: x.short })) });
-  }
-  if (wind) rows.push({ kind: "wind", label: "Wind at the beach", h: 92, t: wind.time, speed: wind.wind_speed_10m, gust: wind.wind_gusts_10m, dir: wind.wind_direction_10m, tone: (i) => windState(wind.wind_direction_10m[i], wind.wind_speed_10m[i], faces).tone });
-  if (tide && p.tide) rows.push({ kind: "tide", label: `Tide, ${p.tide.name}`, h: 58, t: tide.t, v: tide.v, events: tide.events });
+  const rows = timelineRows({ sea, wind, obs, tide, tideName: p.tide?.name, faces });
   renderTimeline($("timeline"), { t0: now - 24 * H, t1: now + 6 * 24 * H, now, sun: wind?.sun ?? [], rows, onScrub: show, tip });
 
   sourceTable(p, { now, sea, marine, wind });

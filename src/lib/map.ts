@@ -81,7 +81,7 @@ export function buildStyle(): StyleSpecification {
   } as StyleSpecification;
 }
 
-export function createMap(el: HTMLElement, opts: { center: [number, number]; zoom: number; minZoom?: number; cooperative?: boolean }) {
+export function createMap(el: HTMLElement, opts: { center: [number, number]; zoom: number; minZoom?: number; cooperative?: boolean; nav?: maplibregl.ControlPosition | false; attribution?: string }) {
   if (!workerSet) {
     maplibregl.setWorkerUrl(workerUrl);
     workerSet = true;
@@ -97,11 +97,11 @@ export function createMap(el: HTMLElement, opts: { center: [number, number]; zoo
     maxBounds: [[BBOX[0] - 6, BBOX[1] - 5], [BBOX[2] + 6, BBOX[3] + 5]],
     dragRotate: false,
     pitchWithRotate: false,
-    attributionControl: { compact: true },
+    attributionControl: { compact: true, customAttribution: opts.attribution },
     cooperativeGestures: opts.cooperative ?? false,
   });
   map.touchZoomRotate.disableRotation();
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
+  if (opts.nav !== false) map.addControl(new maplibregl.NavigationControl({ showCompass: false }), opts.nav ?? "top-left");
   return map;
 }
 
