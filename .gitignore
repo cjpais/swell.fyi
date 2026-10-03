@@ -34,3 +34,6 @@ public/data/
 
 # Local snapshot from before the Overprint redesign (git history replaces it)
 .backup/
+
+# Design explorations: kept locally, not in the repo (run with bun design/serve.mjs)
+design/
