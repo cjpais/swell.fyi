@@ -53,9 +53,11 @@ const nav = [
     </footer>}
     <script>
       import { relTime } from "../lib/format";
-      import { loadMeta } from "../lib/data";
+      import { inlinePage, loadMeta } from "../lib/data";
       const el = document.getElementById("freshness")!;
-      loadMeta().then((m) => {
+      // Pages with their data in the HTML carry this too; the rest ask the data Worker.
+      const at = inlinePage<{ buoysUpdated?: string | null }>()?.buoysUpdated;
+      (at ? Promise.resolve({ fetchedAt: at }) : loadMeta()).then((m) => {
         if (!m.fetchedAt) return;
         const ageH = (Date.now() - Date.parse(m.fetchedAt)) / 36e5;
         el.textContent = `Buoys updated ${relTime(m.fetchedAt)}`;

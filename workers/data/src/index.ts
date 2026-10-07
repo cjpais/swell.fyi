@@ -88,8 +88,10 @@ async function refreshPages(env: Env, force = false): Promise<string> {
     const obj = await env.BUCKET.get(key);
     return obj ? ((await obj.json()) as T) : null;
   };
-  const [field, stations, forecast, tides, recentHs, wrf] = await Promise.all(PAGE_SOURCES.map((k) => read<unknown>(k)));
-  const src = { field, stations: stations ?? [], forecast, tides, recentHs, wrf } as PageSources;
+  // meta.json is rewritten on every check, so it isn't a source above; it only says something
+  // new when one of them has changed.
+  const [[field, stations, forecast, tides, recentHs, wrf], meta] = await Promise.all([Promise.all(PAGE_SOURCES.map((k) => read<unknown>(k))), read<{ fetchedAt: string | null }>("cwa/meta.json")]);
+  const src = { field, stations: stations ?? [], forecast, tides, recentHs, wrf, buoysUpdated: meta?.fetchedAt ?? null } as PageSources;
   const now = Date.now();
   const buoys = new Map(SPOTS.map((s) => [s.id, workingBuoy(s, src.stations, now)?.id ?? null]));
   const ids = [...new Set([...buoys.values()].filter((id) => id != null))];

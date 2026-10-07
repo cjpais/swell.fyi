@@ -31,10 +31,13 @@ export type PageSources = {
   tides: Record<string, Tide> | null;
   recentHs: Record<string, [number, number | null][]> | null;
   wrf: WrfFile | null;
+  /** When CWA's data last changed (cwa/meta.json fetchedAt), for the masthead's "Buoys updated". */
+  buoysUpdated: string | null;
 };
 
 export type SpotPageData = {
   builtAt: string;
+  buoysUpdated: string | null;
   cwa: { code: string; name: string; lat: number; lon: number; issued: string; rows: ForecastRow[] } | null;
   /** The nearest of the spot's buoys with a wave reading in the last 12 hours. */
   buoy: { id: string; hs: number | null; time: string } | null;
@@ -48,6 +51,7 @@ export type SpotPageData = {
 
 export type HomePageData = {
   builtAt: string;
+  buoysUpdated: string | null;
   /** CWA's forecast at the spots' points only. */
   forecast: Forecast | null;
   latest: Record<string, Latest | null>;
@@ -74,6 +78,7 @@ export function spotPage(spot: Spot, src: PageSources, obs: ObsFile | null, now 
   const model = src.field?.spots[spot.id];
   return {
     builtAt: new Date(now).toISOString(),
+    buoysUpdated: src.buoysUpdated,
     cwa: point && src.forecast ? { code: spot.cwaPoint, name: point.name, lat: point.lat, lon: point.lon, issued: src.forecast.issued, rows: point.rows } : null,
     buoy: workingBuoy(spot, src.stations, now),
     tide: src.tides?.[spot.id] ?? null,
@@ -93,6 +98,7 @@ export function homePage(src: PageSources, now = Date.now()): HomePageData {
   const from = (now - 6 * H) / 1000, to = (now + 4 * 24 * H) / 1000;
   return {
     builtAt: new Date(now).toISOString(),
+    buoysUpdated: src.buoysUpdated,
     forecast: f && { ...f, points: Object.fromEntries(Object.entries(f.points).filter(([k]) => points.has(k))) },
     latest: Object.fromEntries(src.stations.map((s) => [s.id, s.latest])),
     sparks: src.recentHs,

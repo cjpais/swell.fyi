@@ -23,6 +23,7 @@ const src: PageSources = {
   tides: await read("cwa/spot-tides.json"),
   recentHs: await read("cwa/recent-hs.json"),
   wrf: await read("cwa/wrf-wind.json"),
+  buoysUpdated: (await read("cwa/meta.json"))?.fetchedAt ?? null,
 };
 await mkdir(join(OUT, "spots"), { recursive: true });
 for (const spot of SPOTS) {

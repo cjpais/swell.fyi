@@ -38,13 +38,20 @@ export const loadSpotTides = () => tryCwa<Record<string, SpotTide>>("spot-tides.
 // ---------- one file per page (scripts/lib/pages.ts builds them) ----------
 export type { SpotPageData, HomePageData } from "../../scripts/lib/pages";
 
-/** A page's live data: written into its HTML by the site Worker (workers/site), else fetched. */
-export function loadPage<T>(path: string): Promise<T | null> {
-  const el = document.getElementById("page-data");
-  if (el?.textContent) {
-    try { return Promise.resolve(JSON.parse(el.textContent) as T); } catch {}
+let inline: unknown;
+/** The page's data, if the site Worker (workers/site) wrote it into the HTML. Parsed once. */
+export function inlinePage<T>(): T | null {
+  if (inline === undefined) {
+    const text = document.getElementById("page-data")?.textContent;
+    try { inline = text ? JSON.parse(text) : null; } catch { inline = null; }
   }
-  return getJson<T>(`${DATA}/pages/${path}.json`).catch(() => null);
+  return inline as T | null;
+}
+
+/** A page's live data: written into its HTML by the site Worker, else fetched. */
+export function loadPage<T>(path: string): Promise<T | null> {
+  const page = inlinePage<T>();
+  return page ? Promise.resolve(page) : getJson<T>(`${DATA}/pages/${path}.json`).catch(() => null);
 }
 
 /** A reading under 3 hours old. */
