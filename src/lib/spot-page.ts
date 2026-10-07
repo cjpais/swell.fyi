@@ -10,6 +10,7 @@ import { createMap, marker, conditionOverlay } from "./map";
 import { PARTS, esc, legendHtml, slots, swIcon, tideAt, windChip, windIcon, windKey } from "./ui";
 import { HOUR as H, at, facesDeg, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile } from "./surf";
 import { DATA, cwaUrl, getCwa, loadPage, type SpotPageData } from "./data";
+import { FIELD_STALE_H } from "./field";
 
 type BuoyRef = { id: string; name: string; zh: string; lat: number; lon: number; km: number };
 type Built = { spot: { id: string; name: string; lat: number; lon: number; model: [number, number]; faces: string; cwaPoint: string }; buoys: BuoyRef[] };
@@ -71,6 +72,8 @@ export async function initSpot(built: Built) {
   const m = d?.model;
   const sea: Sea | null = m ? { label: m.wave.label, time: m.wave.time, get: (v) => (m.wave[v] as (number | null)[] | undefined) ?? m.wave.time.map(() => null) } : null;
   const wind = m?.wind ?? null, sst = m?.sst ?? null;
+  const modelAgeH = m ? (Date.now() - Date.parse(m.fetchedAt)) / 36e5 : 0;
+  const modelOld = modelAgeH > FIELD_STALE_H ? ` (${Math.round(modelAgeH)} h old)` : "";
   const obs = obsTable(d?.obs ?? null);
   const obsHs = obs?.col("wave_height_m") ?? [];
   const lastObs = obs ? obs.t.findLast((_, i) => obsHs[i] != null) ?? null : null;
@@ -84,7 +87,7 @@ export async function initSpot(built: Built) {
     R.text("kind", tsIn == null ? "Right now" : ts < now ? "Earlier" : "Forecast for");
     R.text("when", whenLabel(ts));
     R.text("fc-hs", fmt(hs));
-    R.text("fc-src", sea ? `${sea.label} model, total sea offshore` : "Model unavailable");
+    R.text("fc-src", sea ? `${sea.label} model, total sea offshore${modelOld}` : "Model unavailable");
     if (obs && lastObs != null) {
       const past = ts <= lastObs + H;
       const bt = past ? ts : lastObs;

@@ -28,7 +28,7 @@ export async function loadField(): Promise<Field | null> {
 
 /** A line for the panel when the forecast is missing or old, else null. */
 export function fieldProblem(f: Field | null): string | null {
-  if (!f) return "Forecast unavailable right now. Spot pages still load it directly.";
+  if (!f) return "Forecast unavailable right now.";
   const ageH = (Date.now() - Date.parse(f.fetchedAt)) / 36e5;
   return ageH > FIELD_STALE_H ? `Forecast is ${Math.round(ageH)} h old.` : null;
 }
