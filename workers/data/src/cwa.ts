@@ -1,8 +1,8 @@
 // Keeps the live CWA files in R2 (cwa/*) fresh. Each run HEADs CWA's four S3 objects and only
 // downloads and re-derives the ones whose ETag changed, so most runs cost four tiny requests.
 // The 48 h observations get a new ETag every ~10 minutes whether or not anything in them changed
-// (new readings come once an hour, 10-30 minutes after it, with the odd correction between), so
-// their readings are hashed too, and the windows only rewritten when those differ.
+// (new readings come once an hour, at about half past, and a few corrections at :50), so their
+// readings are hashed too, and the windows only rewritten when those differ.
 //
 // Writers are split so nothing races:
 //   this Worker   cwa/stations.json, meta.json, obs/{id}.json (120-day windows), recent-hs.json,

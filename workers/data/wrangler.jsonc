@@ -10,8 +10,10 @@
   "workers_dev": false,
   // Every 20 min: cheap checks of Open-Meteo's model metadata and CWA's S3 ETags. A part is
   // only rebuilt when its upstream changed (field: ~6 times a day; CWA obs: hourly; WRF: 4 runs a day).
-  // At :05, :25 and :45: CWA publishes about 10 s past each 10-minute mark, so never race it.
-  "triggers": { "crons": ["5,25,45 * * * *"] },
+  // Timed to CWA's buoy file (watched 2026-10-07): new readings at about :30:10, corrections
+  // at :50, publishes ~10 s past the 10-minute mark. :33 picks up the readings, :53 the
+  // corrections, and every check is ~3 min clear of a publish.
+  "triggers": { "crons": ["13,33,53 * * * *"] },
   "limits": { "cpu_ms": 60000 },
   "observability": { "enabled": true }
   // Secrets: REFRESH_TOKEN (for POST /refresh); optional OPEN_METEO_API_KEY, CWA_API_KEY.
