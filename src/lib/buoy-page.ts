@@ -4,7 +4,7 @@ import { fetchMarine, fetchWind, partitioned, WAVE_MODELS, WIND_MODELS, km, type
 import { fmt, compass, taipeiTime } from "./format";
 import { renderCompass } from "./compass";
 import { renderTimeline, type Row } from "./timeline";
-import { createMap, marker, conditionOverlay } from "./map";
+import { lazyOverlay } from "./lazy-map";
 import { PARTS, esc, legendHtml, slots, swIcon, windChip, windIcon, windKey } from "./ui";
 import { HOUR, at, facesDeg, fetchSpotWind, nowS, obsTable, whenLabel, windState, type ObsFile, type Tone } from "./surf";
 import { cwaUrl, getCwa, loadStations } from "./data";
@@ -250,9 +250,11 @@ function startHero(p: Payload) {
   const ref = p.spots[0];
   const faces = ref ? facesDeg(ref.faces) : null;
   const R = slots($("readout"));
-  const map = createMap($("map"), { center: [p.lon, p.lat], zoom: 9.2, minZoom: 6, cooperative: true });
-  const overlay = conditionOverlay(map, [p.lon, p.lat]);
-  for (const s of p.spots) marker(map, [s.lon, s.lat], `<span>${esc(s.name.replace(/ \(.*\)$/, ""))}</span>`, "map-tag tag-spot", `/spots/${s.id}/`);
+  const overlay = lazyOverlay([p.lon, p.lat], ({ createMap, marker }) => {
+    const map = createMap($("map"), { center: [p.lon, p.lat], zoom: 9.2, minZoom: 6, cooperative: true });
+    for (const s of p.spots) marker(map, [s.lon, s.lat], `<span>${esc(s.name.replace(/ \(.*\)$/, ""))}</span>`, "map-tag tag-spot", `/spots/${s.id}/`);
+    return map;
+  });
   const windReq = fetchSpotWind(p.lat, p.lon, { past: 7, days: 2 }).catch(() => null);
 
   return async (obsFile: ObsFile, marine: Grid | Error | null) => {

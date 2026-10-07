@@ -2,7 +2,7 @@
 // wind at every spot (ECMWF IFS) colouring the strips, chips and callouts. The structure is built
 // at build time; the numbers come in the page's data (scripts/lib/pages.ts), usually already in
 // the HTML (workers/site).
-import { createMap, marker, spotCallouts } from "./map";
+import { loadMap } from "./lazy-map";
 import { arrowSvg } from "./glyphs";
 import { esc, strip, sparkline } from "./ui";
 import { fmt, compass } from "./format";
@@ -57,31 +57,9 @@ export async function initHome(p: Payload) {
     set("meta", !l ? "No data" : ok ? (v.sea_temp_c != null ? `${fmt(v.sea_temp_c)} °C water` : "") : `${Math.round((now - Date.parse(l.time) / 1000) / H)} h old`);
   }
 
-  // ---------- map ----------
-  // Narrow maps zoom out so the callouts pushed out to sea still fit.
-  const narrow = $("#map")!.clientWidth < 600;
-  const map = createMap($("#map")!, { center: narrow ? [120.95, 23.65] : [120.95, 23.6], zoom: narrow ? 5.8 : 6.55 });
-
-  // Buoys as small measured tags; stale ones shrink to a grey dot.
-  map.on("load", () => {
-    for (const st of p.stations) {
-      const v = latest[st.id], hs = v?.values.wave_height_m ?? null;
-      const ok = isFresh(v?.time, now) && hs != null;
-      const el = marker(map, [st.lon, st.lat], `<span>${ok ? fmt(hs) : ""}</span>${ok ? arrowSvg(v!.values.wave_dir_deg, 11) : ""}`, `buoy-dot${ok ? "" : " stale"}`, `/buoys/${st.id}/`);
-      el.title = `${st.name}: ${ok ? `${fmt(hs)} m, ${fmt(v!.values.wave_period_s)} s from ${compass(v!.values.wave_dir_deg)}` : "no current reading"}`;
-    }
-  });
-
-  // Spots as callouts pushed out to sea, east or west of the island.
-  const callouts = spotCallouts(map, p.spots.map((s) => ({
-    id: s.id, lat: s.lat, lon: s.lon,
-    side: s.lon < 120.8 ? "west" : "east",
-    href: `/spots/${s.id}/`,
-    html: `<span class="co-name">${esc(s.name.replace(/ \(.*\)$/, "").replace(/ \/ .*/, ""))}</span><span class="co-val">${fmt(peak(s.id))}</span><i class="co-tone t-none" data-tone="${s.id}"></i>`,
-  })));
-
-  // ---------- wind: colours the strips, chips and callouts ----------
+  // ---------- wind: colours the strips and chips, and the map's callouts below ----------
   const winds = d?.wind;
+  const windNow = new Map<string, { label: string; tone: Tone }>();
   if (!winds || !Object.keys(winds).length) {
     document.querySelectorAll("[data-chip]").forEach((c) => (c.textContent = "Wind unavailable"));
   } else {
@@ -93,11 +71,39 @@ export async function initHome(p: Payload) {
     p.spots.forEach((s, i) => {
       if (!winds[s.id]) return;
       const ws = stateAt(i)(now);
+      windNow.set(s.id, ws);
       const chip = $(`[data-spot="${s.id}"] [data-chip]`);
       if (chip) { chip.className = `wind-chip t-${ws.tone}`; chip.textContent = ws.label; }
-      const tone = $(`[data-tone="${s.id}"]`);
-      if (tone) { tone.className = `co-tone t-${ws.tone}`; tone.title = `Wind now: ${ws.label}`; }
     });
   }
-  callouts.layout();
+
+  // ---------- map ----------
+  // Loaded on its own (src/lib/lazy-map.ts): everything above draws without waiting for MapLibre.
+  loadMap().then(({ createMap, marker, spotCallouts }) => {
+    // Narrow maps zoom out so the callouts pushed out to sea still fit.
+    const narrow = $("#map")!.clientWidth < 600;
+    const map = createMap($("#map")!, { center: narrow ? [120.95, 23.65] : [120.95, 23.6], zoom: narrow ? 5.8 : 6.55 });
+
+    // Buoys as small measured tags; stale ones shrink to a grey dot.
+    map.on("load", () => {
+      for (const st of p.stations) {
+        const v = latest[st.id], hs = v?.values.wave_height_m ?? null;
+        const ok = isFresh(v?.time, now) && hs != null;
+        const el = marker(map, [st.lon, st.lat], `<span>${ok ? fmt(hs) : ""}</span>${ok ? arrowSvg(v!.values.wave_dir_deg, 11) : ""}`, `buoy-dot${ok ? "" : " stale"}`, `/buoys/${st.id}/`);
+        el.title = `${st.name}: ${ok ? `${fmt(hs)} m, ${fmt(v!.values.wave_period_s)} s from ${compass(v!.values.wave_dir_deg)}` : "no current reading"}`;
+      }
+    });
+
+    // Spots as callouts pushed out to sea, east or west of the island.
+    const callouts = spotCallouts(map, p.spots.map((s) => {
+      const ws = windNow.get(s.id);
+      return {
+        id: s.id, lat: s.lat, lon: s.lon,
+        side: s.lon < 120.8 ? "west" : "east",
+        href: `/spots/${s.id}/`,
+        html: `<span class="co-name">${esc(s.name.replace(/ \(.*\)$/, "").replace(/ \/ .*/, ""))}</span><span class="co-val">${fmt(peak(s.id))}</span><i class="co-tone t-${ws?.tone ?? "none"}"${ws ? ` title="Wind now: ${esc(ws.label)}"` : ""}></i>`,
+      };
+    }));
+    callouts.layout();
+  }).catch((e) => console.error("Map failed to load:", e));
 }

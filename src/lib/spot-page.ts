@@ -6,7 +6,7 @@ import { fmt, compass } from "./format";
 import { renderCompass } from "./compass";
 import { renderTimeline } from "./timeline";
 import { makeConditions, roseSwells, swellNote, timelineRows, type WindSeries } from "./conditions";
-import { createMap, marker, conditionOverlay } from "./map";
+import { lazyOverlay } from "./lazy-map";
 import { PARTS, esc, legendHtml, slots, swIcon, tideAt, windChip, windIcon, windKey } from "./ui";
 import { HOUR as H, at, facesDeg, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile } from "./surf";
 import { DATA, cwaUrl, getCwa, loadPage, type SpotPageData } from "./data";
@@ -63,10 +63,12 @@ export async function initSpot(built: Built) {
 
   // ---------- hero: readout, compass, map ----------
   const R = slots($("readout"));
-  const map = createMap($("map"), { center: [s.lon, s.lat], zoom: 10.6, minZoom: 7, cooperative: true });
-  const overlay = conditionOverlay(map, [s.lon, s.lat]);
-  if (p.buoy) marker(map, [p.buoy.lon, p.buoy.lat], `<span>${esc(p.buoy.name)} buoy</span>`, "map-tag tag-buoy", `/buoys/${p.buoy.id}/`);
-  marker(map, [s.lon, s.lat], `<span>${esc(s.name.replace(/ \(.*\)$/, ""))}</span>`, "map-tag tag-spot");
+  const overlay = lazyOverlay([s.lon, s.lat], ({ createMap, marker }) => {
+    const map = createMap($("map"), { center: [s.lon, s.lat], zoom: 10.6, minZoom: 7, cooperative: true });
+    if (p.buoy) marker(map, [p.buoy.lon, p.buoy.lat], `<span>${esc(p.buoy.name)} buoy</span>`, "map-tag tag-buoy", `/buoys/${p.buoy.id}/`);
+    marker(map, [s.lon, s.lat], `<span>${esc(s.name.replace(/ \(.*\)$/, ""))}</span>`, "map-tag tag-spot");
+    return map;
+  });
 
   // MFWAM sea (GFS-Wave where MFWAM has no cell), ECMWF IFS wind and SST, from field.json.
   const m = d?.model;
