@@ -13,8 +13,13 @@ interface Env {
   BUCKET: R2Bucket;
 }
 
-/** Edge cache for the data files. The cron rewrites them at most every 10 minutes. */
-const CACHE_S = 60;
+/**
+ * Edge cache for the data files. A copy under FRESH_S old is served as is; one under STALE_S is
+ * still served, and refreshed from R2 behind it, so a visit rarely waits on R2 (~0.5 s from a
+ * cold edge). The cron rewrites the files at most every 10 minutes.
+ */
+const FRESH_S = 60;
+const STALE_S = 600;
 
 function dataKey(path: string): string | null {
   if (path === "/") return "pages/home.json";
@@ -24,13 +29,18 @@ function dataKey(path: string): string | null {
 
 async function pageData(env: Env, ctx: ExecutionContext, key: string): Promise<string | null> {
   const cacheKey = new Request(`https://swell.fyi/__page-data/${key}`);
+  const fromR2 = async () => {
+    const obj = await env.BUCKET.get(key);
+    if (!obj) return null;
+    const text = await obj.text();
+    const headers = { "Content-Type": "application/json", "Cache-Control": `max-age=${STALE_S}`, "X-Fetched": String(Date.now()) };
+    ctx.waitUntil(caches.default.put(cacheKey, new Response(text, { headers })));
+    return text;
+  };
   const hit = await caches.default.match(cacheKey);
-  if (hit) return hit.text();
-  const obj = await env.BUCKET.get(key);
-  if (!obj) return null;
-  const text = await obj.text();
-  ctx.waitUntil(caches.default.put(cacheKey, new Response(text, { headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${CACHE_S}` } })));
-  return text;
+  if (!hit) return fromR2();
+  if (Date.now() - Number(hit.headers.get("X-Fetched")) > FRESH_S * 1000) ctx.waitUntil(fromR2().catch(() => null));
+  return hit.text();
 }
 
 export default {
