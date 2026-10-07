@@ -36,7 +36,7 @@ export const loadMeta = () => getCwa<CwaMeta>("meta.json");
 export const loadSpotTides = () => tryCwa<Record<string, SpotTide>>("spot-tides.json");
 
 // ---------- one file per page (scripts/lib/pages.ts builds them) ----------
-export type { SpotPageData, HomePageData } from "../../scripts/lib/pages";
+export type { SpotPageData, HomePageData, BuoyPageData } from "../../scripts/lib/pages";
 
 let inline: unknown;
 /** The page's data, if the site Worker (workers/site) wrote it into the HTML. Parsed once. */

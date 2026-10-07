@@ -6,7 +6,9 @@ import { SPOTS } from "../../data/spots";
 import { readoutShell, swIcon, windIcon } from "../../lib/ui";
 import { cleanName, cleanZh } from "../../lib/surf";
 
-// One page per station in the list; its readings and archive load live (src/lib/buoy-page.ts).
+// One page per station in the list. Its last week of readings, the models at the buoy and its
+// status come in the page's data, which the site Worker writes into the HTML; the 120-day file,
+// the archive and the model comparison load behind it (src/lib/buoy-page.ts).
 export async function getStaticPaths() {
   return (await stationList()).map((station) => ({ params: { id: station.id }, props: { station } }));
 }

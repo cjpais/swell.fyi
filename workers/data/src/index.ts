@@ -14,9 +14,9 @@
 // A cron runs every 10 minutes. Each part checks cheaply whether its upstream changed (Open-Meteo
 // model metadata, CWA's S3 ETags) and only downloads and rebuilds when it has. The pages go
 // last, and are rebuilt when any file they're cut from has changed.
-import { buildField, latestRuns } from "../../../scripts/lib/field";
+import { buildBuoyModels, buildField, latestRuns } from "../../../scripts/lib/field";
 import { buildWrf, wrfEtags, WRF_MODELS, type WrfFile } from "../../../scripts/lib/wrf";
-import { homePage, spotPage, workingBuoy, type ObsFile, type PageSources } from "../../../scripts/lib/pages";
+import { buoyPage, homePage, isWaveStation, spotPage, workingBuoy, type ObsFile, type PageSources } from "../../../scripts/lib/pages";
 import { SPOTS } from "../../../src/data/spots";
 import { refreshCwa } from "./cwa";
 
@@ -29,9 +29,11 @@ interface Env {
 
 const FIELD = "data/field.json";
 const WRF = "cwa/wrf-wind.json";
+const BUOY_MODELS = "data/buoy-models.json";
+const STATIONS = "cwa/stations.json";
 const HOME = "pages/home.json";
 /** What the pages are cut from, in PageSources order. */
-const PAGE_SOURCES = [FIELD, "cwa/stations.json", "cwa/spot-forecast.json", "cwa/spot-tides.json", "cwa/recent-hs.json", WRF];
+const PAGE_SOURCES = [FIELD, STATIONS, "cwa/spot-forecast.json", "cwa/spot-tides.json", "cwa/recent-hs.json", WRF, BUOY_MODELS];
 // The site, plus any local dev or preview port. The data is public and read-only.
 const allowed = (o: string) => o === "https://swell.fyi" || /^http:\/\/localhost:\d+$/.test(o);
 /** Rebuild the field anyway past this age, so the past-day/7-day window keeps sliding. */
@@ -39,20 +41,34 @@ const MAX_AGE_S = 6 * 3600;
 /** Edge and browser cache. Short: a new build should show up within minutes. */
 const CACHE_S = 300;
 
-async function refreshField(env: Env, force = false): Promise<string> {
+/** field.json, and the same models at each wave buoy (buoy-models.json), on the same runs. */
+async function refreshField(env: Env, force = false): Promise<string[]> {
   const key = env.OPEN_METEO_API_KEY || undefined;
   const runs = await latestRuns(key);
-  const head = await env.BUCKET.head(FIELD);
+  const [head, buoysHead] = await Promise.all([env.BUCKET.head(FIELD), env.BUCKET.head(BUOY_MODELS)]);
   const m = head?.customMetadata ?? {};
   const age = head ? Date.now() / 1000 - Number(m.builtAt ?? 0) : Infinity;
   const fresh = Number(m.wave) >= runs.wave && Number(m.wind) >= runs.wind && age < MAX_AGE_S;
-  if (fresh && !force) return `field.json up to date (built ${Math.round(age / 60)} min ago)`;
-  const field = await buildField({ key, runs });
-  await env.BUCKET.put(FIELD, JSON.stringify(field), {
+  if (fresh && buoysHead && !force) return [`field.json up to date (built ${Math.round(age / 60)} min ago)`];
+  const out: string[] = [];
+  const put = (k: string, body: unknown) => env.BUCKET.put(k, JSON.stringify(body), {
     httpMetadata: { contentType: "application/json" },
     customMetadata: { builtAt: String(Math.round(Date.now() / 1000)), wave: String(runs.wave), wind: String(runs.wind) },
   });
-  return `field.json rebuilt (wave run ${new Date(runs.wave * 1000).toISOString()}, wind run ${new Date(runs.wind * 1000).toISOString()})`;
+  if (!fresh || force) {
+    await put(FIELD, await buildField({ key, runs }));
+    out.push(`field.json rebuilt (wave run ${new Date(runs.wave * 1000).toISOString()}, wind run ${new Date(runs.wind * 1000).toISOString()})`);
+  }
+  // Its own try: a failure here shouldn't hold back field.json.
+  try {
+    const obj = await env.BUCKET.get(STATIONS);
+    const buoys = (obj ? await obj.json<(PageSources["stations"][number] & { lat: number; lon: number })[]>() : []).filter(isWaveStation);
+    await put(BUOY_MODELS, await buildBuoyModels(buoys, { key, runs }));
+    out.push(`buoy-models.json rebuilt (${buoys.length} buoys)`);
+  } catch (e) {
+    out.push(`FAILED buoy-models.json: ${(e as Error).message}`);
+  }
+  return out;
 }
 
 /** CWA's WRF runs: rebuild a model when its last lead file changes, i.e. a new run has fully landed. */
@@ -90,8 +106,8 @@ async function refreshPages(env: Env, force = false): Promise<string> {
   };
   // meta.json is rewritten on every check, so it isn't a source above; it only says something
   // new when one of them has changed.
-  const [[field, stations, forecast, tides, recentHs, wrf], meta] = await Promise.all([Promise.all(PAGE_SOURCES.map((k) => read<unknown>(k))), read<{ fetchedAt: string | null }>("cwa/meta.json")]);
-  const src = { field, stations: stations ?? [], forecast, tides, recentHs, wrf, buoysUpdated: meta?.fetchedAt ?? null } as PageSources;
+  const [[field, stations, forecast, tides, recentHs, wrf, buoyModels], meta] = await Promise.all([Promise.all(PAGE_SOURCES.map((k) => read<unknown>(k))), read<{ fetchedAt: string | null }>("cwa/meta.json")]);
+  const src = { field, stations: stations ?? [], forecast, tides, recentHs, wrf, buoyModels, buoysUpdated: meta?.fetchedAt ?? null } as PageSources;
   const now = Date.now();
   const buoys = new Map(SPOTS.map((s) => [s.id, workingBuoy(s, src.stations, now)?.id ?? null]));
   const ids = [...new Set([...buoys.values()].filter((id) => id != null))];
@@ -103,9 +119,14 @@ async function refreshPages(env: Env, force = false): Promise<string> {
     const id = buoys.get(s.id);
     return put(`pages/spots/${s.id}.json`, spotPage(s, src, id ? obs.get(id) ?? null : null, now));
   }));
+  // Every station's page, a few at a time: each reads its 120-day file.
+  for (let i = 0; i < src.stations.length; i += 8) {
+    await Promise.all(src.stations.slice(i, i + 8).map(async ({ id }) =>
+      put(`pages/buoys/${id}.json`, buoyPage(id, src, obs.get(id) ?? (await read<ObsFile>(`cwa/obs/${id}.json`)), now))));
+  }
   // Home last: its metadata marks the whole set as built from these sources.
   await put(HOME, homePage(src, now), { sources });
-  return `pages rebuilt (home + ${SPOTS.length} spots)`;
+  return `pages rebuilt (home, ${SPOTS.length} spots, ${src.stations.length} stations)`;
 }
 
 async function refresh(env: Env, { only, force = false }: { only?: string | null; force?: boolean } = {}): Promise<string[]> {
@@ -146,7 +167,7 @@ async function handle(url: URL, env: Env): Promise<Response> {
     const file = cwa[1];
     return fromR2(env, `cwa/${file}`, file.endsWith(".csv") ? { "Content-Disposition": `attachment; filename="${file.split("/").pop()}"` } : {});
   }
-  const page = /^\/pages\/((?:spots\/)?[\w-]+\.json)$/.exec(path);
+  const page = /^\/pages\/((?:spots\/|buoys\/)?[\w-]+\.json)$/.exec(path);
   if (page) return fromR2(env, `pages/${page[1]}`);
   if (path === "/status") {
     const [field, meta, index, wrf, home] = await Promise.all([env.BUCKET.head(FIELD), env.BUCKET.get("cwa/meta.json"), env.BUCKET.get("cwa/archive-index.json"), env.BUCKET.get(WRF), env.BUCKET.head(HOME)]);

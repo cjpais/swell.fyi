@@ -7,10 +7,14 @@ import { renderTimeline, type Row } from "./timeline";
 import { lazyOverlay } from "./lazy-map";
 import { PARTS, esc, legendHtml, slots, swIcon, windChip, windIcon, windKey } from "./ui";
 import { HOUR, at, facesDeg, fetchSpotWind, nowS, obsTable, whenLabel, windState, type ObsFile, type Tone } from "./surf";
-import { cwaUrl, getCwa, loadStations } from "./data";
+import { cwaUrl, getCwa, loadPage, loadStations, type BuoyPageData } from "./data";
+import type { SeaSeries, WindSeries } from "./conditions";
 
 type Payload = { id: string; name: string; lat: number; lon: number; wave: boolean; spots: { id: string; name: string; lat: number; lon: number; faces: string }[] };
 type Obs = { columns: string[]; rows: (string | number | null)[][] };
+type Latest = NonNullable<BuoyPageData["latest"]>;
+/** The hero's wind when the buoy has no anemometer: ECMWF IFS at the buoy, with sunrise/sunset. */
+type HeroWind = WindSeries & { sun: [number, number][] };
 
 const $ = (id: string) => document.getElementById(id)!;
 const H = 3600;
@@ -44,28 +48,43 @@ const PANELS: Panel[] = [
 ];
 
 export async function initBuoy(p: Payload) {
-  // The hero map starts loading tiles while the data comes in.
-  const hero = p.wave ? startHero(p) : null;
-  // The station's archive size and status, from the live list.
-  loadStations().then((list) => {
-    const s = list.find((x) => x.id === p.id), l = s?.latest;
-    $("archive").textContent = l ? `${l.archiveRows.toLocaleString("en")} hourly rows since ${l.archiveStart.slice(0, 10)}` : "Empty";
-    if (s) $("status").textContent = s.active ? "Transmitting" : "Not transmitting (per O-B0076-001)";
-  }).catch(() => ($("archive").textContent = "Unavailable"));
-  let obs: Obs;
-  try {
-    obs = await getCwa<Obs>(`obs/${p.id}.json`);
-  } catch {
+  // The 120-day file (longer chart views) and the 92-day model comparison load behind the page's
+  // own data, which holds the last week, the models at the buoy, and the station's status.
+  const fileReq = getCwa<Obs>(`obs/${p.id}.json`).catch(() => null);
+  const modelsReq = p.wave ? Promise.all([fetchMarine(p.lat, p.lon, 92, 3).catch((e: Error) => e), fetchWind(p.lat, p.lon, 92, 3).catch((e: Error) => e)]) : null;
+  const d = await loadPage<BuoyPageData>(`buoys/${p.id}`);
+
+  const status = (active: boolean | null | undefined, l: Latest | null | undefined) => {
+    $("archive").textContent = l?.archiveRows != null && l.archiveStart ? `${l.archiveRows.toLocaleString("en")} hourly rows since ${l.archiveStart.slice(0, 10)}` : "Empty";
+    if (active != null) $("status").textContent = active ? "Transmitting" : "Not transmitting (per O-B0076-001)";
+  };
+  if (d) status(d.active, d.latest);
+  else loadStations().then((list) => { const s = list.find((x) => x.id === p.id); status(s?.active, s?.latest); }).catch(() => ($("archive").textContent = "Unavailable"));
+
+  let obs = d?.obs ?? (await fileReq);
+  if (!obs) {
     $("charts").innerHTML = `<p class="note">This station's readings are unavailable right now.</p>`;
     return;
   }
-  const recent = obs;
+  // The hero: from the page data's models if it has them, else once the comparison's are in.
+  const hero = p.wave ? startHero(p) : null;
+  const m = d?.model;
+  if (hero && m) hero(obs, { label: m.wave.label, time: m.wave.time, get: (v) => (m.wave[v] as (number | null)[] | undefined) ?? m.wave.time.map(() => null) }, m.wind);
+
   let t = obs.rows.map((r) => sec(String(r[0])));
   let fullLoaded = false;
   const col = (name: string) => {
-    const i = obs.columns.indexOf(name);
-    return obs.rows.map((r) => r[i] as number | null);
+    const i = obs!.columns.indexOf(name);
+    return obs!.rows.map((r) => r[i] as number | null);
   };
+  // The page data holds the last week; longer views need the 120-day file.
+  async function loadWindow() {
+    const file = await fileReq;
+    if (!fullLoaded && file && file.rows.length > obs!.rows.length) {
+      obs = file;
+      t = file.rows.map((r) => sec(String(r[0])));
+    }
+  }
   // The JSON holds the last 120 days; the whole archive is the CSV.
   async function loadFull() {
     if (fullLoaded) return;
@@ -177,27 +196,25 @@ export async function initBuoy(p: Payload) {
 
   draw();
 
-  if (p.wave) {
-    [marine, wind] = await Promise.all([
-      fetchMarine(p.lat, p.lon, 92, 3).catch((e: Error) => e),
-      fetchWind(p.lat, p.lon, 92, 3).catch((e: Error) => e),
-    ]);
-    draw();
-    hero?.(recent, marine);
-    $("models").addEventListener("change", (e) => {
-      showModels = (e.target as HTMLInputElement).checked;
-      draw();
-    });
-  }
-
   $("range").addEventListener("click", async (e) => {
     const b = (e.target as HTMLElement).closest("button");
     if (!b) return;
     days = b.dataset.days === "all" ? "all" : Number(b.dataset.days);
     $("range").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     if (days === "all") await loadFull();
+    else await loadWindow();
     draw();
   });
+
+  if (modelsReq) {
+    [marine, wind] = await modelsReq;
+    draw();
+    if (hero && !m) hero(obs, partitioned(marine), await fetchSpotWind(p.lat, p.lon, { past: 7, days: 2 }).catch(() => null));
+    $("models").addEventListener("change", (e) => {
+      showModels = (e.target as HTMLInputElement).checked;
+      draw();
+    });
+  }
 }
 
 function stats(pairs: [number, number][]) {
@@ -242,8 +259,8 @@ function renderRaw(obs: Obs) {
 
 /**
  * The top of a wave buoy's page: measured readout, compass, map and a six-day timeline.
- * Starts the map and the wind request right away; call the returned function with the
- * observations and the marine models once they're in.
+ * Starts the map right away; call the returned function with the observations, the model sea
+ * state at the buoy and the model wind (used where the buoy has no anemometer).
  */
 function startHero(p: Payload) {
   const now = nowS();
@@ -255,11 +272,8 @@ function startHero(p: Payload) {
     for (const s of p.spots) marker(map, [s.lon, s.lat], `<span>${esc(s.name.replace(/ \(.*\)$/, ""))}</span>`, "map-tag tag-spot", `/spots/${s.id}/`);
     return map;
   });
-  const windReq = fetchSpotWind(p.lat, p.lon, { past: 7, days: 2 }).catch(() => null);
 
-  return async (obsFile: ObsFile, marine: Grid | Error | null) => {
-    const wind = await windReq;
-    const sea = marine ? partitioned(marine) : null;
+  return (obsFile: ObsFile, sea: SeaSeries | null, wind: HeroWind | null) => {
     const obs = obsTable(obsFile)!;
     const C = (n: string) => obs.col(n);
     const hasObsWind = C("wind_speed_ms").some((v) => v != null);

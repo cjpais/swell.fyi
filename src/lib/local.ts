@@ -52,7 +52,7 @@ export function stationList(): Promise<Station[]> {
 }
 
 /** Stations that have reported a wave height at some point in the archive. */
-export const isWaveStation = (s: Station) => s.observes.includes("WaveHeight") || s.latest?.values.wave_height_m != null;
+export { isWaveStation } from "../../scripts/lib/pages";
 
 // ---------- local snapshot only (design labs; the live pages don't use these) ----------
 export type Meta = { fetchedAt: string; via: string; datasets: Record<string, { name: string; issued?: string }> };

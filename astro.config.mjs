@@ -23,13 +23,15 @@ function modulePreload() {
         const mapChunk = files.find((f) => /^map\.[\w-]+\.js$/.test(f));
         if (!mapChunk) throw new Error('module-preload: no map chunk in dist/_astro');
         // Static imports only: `import("./x.js")` is left to load when asked for.
+        /** @type {Map<string, string[]>} */
         const deps = new Map();
+        /** @param {string} file @returns {Promise<string[]>} */
         const depsOf = async (file) => {
           if (!deps.has(file)) {
             const code = await readFile(join(assets, file), 'utf8');
             deps.set(file, [...code.matchAll(/(?:from|import)\s*"\.\/([^"]+\.js)"/g)].map((m) => m[1]));
           }
-          return deps.get(file);
+          return deps.get(file) ?? [];
         };
         let n = 0;
         for (const file of await readdir(root, { recursive: true })) {
@@ -37,7 +39,7 @@ function modulePreload() {
           const html = await readFile(join(root, file), 'utf8');
           const entries = [...html.matchAll(/<script type="module" src="\/_astro\/([^"]+\.js)"/g)].map((m) => m[1]);
           const seen = new Set(entries), queue = [...entries];
-          while (queue.length) for (const d of await depsOf(queue.shift())) if (!seen.has(d)) { seen.add(d); queue.push(d); }
+          while (queue.length) for (const d of await depsOf(/** @type {string} */ (queue.shift()))) if (!seen.has(d)) { seen.add(d); queue.push(d); }
           const preload = [...seen].filter((f) => !entries.includes(f));
           if (html.includes('id="map"') && !preload.includes(mapChunk)) preload.push(mapChunk);
           if (!preload.length) continue;

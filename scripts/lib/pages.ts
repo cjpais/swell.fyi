@@ -5,14 +5,17 @@
 //
 //   pages/home.json          the home page
 //   pages/spots/{id}.json    each spot page
+//   pages/buoys/{id}.json    each station's page
 //
 // Pure: the swell-data Worker (workers/data) and scripts/build-pages.ts feed it the sources.
 // The types are the parts of each source file these pages read (src/lib/data.ts has the rest).
 import { SPOTS, type Spot } from "../../src/data/spots";
+import type { BuoyModelsFile } from "./field";
 import type { WrfFile } from "./wrf";
 
 type S = (number | null)[];
-type Latest = { time: string; values: Record<string, number | null> };
+type Latest = { time: string; values: Record<string, number | null>; archiveStart?: string; archiveRows?: number };
+type Station = { id: string; active?: boolean; observes?: string[]; latest: Latest | null };
 type ForecastRow = [string, number | null, number | null, number | null, number | null, number | null];
 type Forecast = { issued: string; columns: string[]; points: Record<string, { name: string; lat: number; lon: number; rows: ForecastRow[] }> };
 type Tide = { name: string; events: [string, string, number | null][] } | null;
@@ -26,11 +29,12 @@ type FieldSpot = {
 
 export type PageSources = {
   field: { fetchedAt: string; spots: Record<string, FieldSpot> } | null;
-  stations: { id: string; latest: Latest | null }[];
+  stations: Station[];
   forecast: Forecast | null;
   tides: Record<string, Tide> | null;
   recentHs: Record<string, [number, number | null][]> | null;
   wrf: WrfFile | null;
+  buoyModels: BuoyModelsFile | null;
   /** When CWA's data last changed (cwa/meta.json fetchedAt), for the masthead's "Buoys updated". */
   buoysUpdated: string | null;
 };
@@ -60,7 +64,25 @@ export type HomePageData = {
   wind: Record<string, { time: number[]; wind_speed_10m: S; wind_direction_10m: S }>;
 };
 
+export type BuoyPageData = {
+  builtAt: string;
+  buoysUpdated: string | null;
+  /** From CWA's station list: transmitting or not, and the archive's size. */
+  active: boolean | null;
+  latest: Latest | null;
+  /** The last week of readings: the timeline, the default charts and the raw table. Longer views fetch the 120-day file. */
+  obs: ObsFile | null;
+  /** Model sea state and wind at a wave buoy, from buoy-models.json. */
+  model: (BuoyModelsFile["buoys"][string] & { fetchedAt: string }) | null;
+};
+
 const H = 3600 * 1000;
+
+/** Stations that have reported a wave height at some point: they get the full buoy page. */
+export const isWaveStation = (s: { observes?: string[]; latest: Latest | null }) => !!s.observes?.includes("WaveHeight") || s.latest?.values.wave_height_m != null;
+
+/** Rows of an observation file from `ms` (unix ms) on. */
+const since = (obs: ObsFile, ms: number): ObsFile => ({ columns: obs.columns, rows: obs.rows.filter((r) => Date.parse(String(r[0])) >= ms) });
 
 /** The nearest of a spot's buoys (in the spot's order) with a wave reading in the last 12 hours. */
 export function workingBuoy(spot: Spot, stations: PageSources["stations"], now = Date.now()): SpotPageData["buoy"] {
@@ -88,7 +110,22 @@ export function spotPage(spot: Spot, src: PageSources, obs: ObsFile | null, now 
     }),
     model: model && src.field ? { ...model, fetchedAt: src.field.fetchedAt } : null,
     // The readout and the timeline reach back a day; keep two.
-    obs: obs && { columns: obs.columns, rows: obs.rows.filter((r) => Date.parse(String(r[0])) >= now - 48 * H) },
+    obs: obs && since(obs, now - 48 * H),
+  };
+}
+
+/** `obs` is the station's file (cwa/obs/{id}.json). */
+export function buoyPage(id: string, src: PageSources, obs: ObsFile | null, now = Date.now()): BuoyPageData {
+  const station = src.stations.find((s) => s.id === id);
+  const model = src.buoyModels?.buoys[id];
+  return {
+    builtAt: new Date(now).toISOString(),
+    buoysUpdated: src.buoysUpdated,
+    active: station?.active ?? null,
+    latest: station?.latest ?? null,
+    // The charts open on 7 days; a day more covers the time until the next rebuild.
+    obs: obs && since(obs, now - 8 * 24 * H),
+    model: model && src.buoyModels ? { ...model, fetchedAt: src.buoyModels.fetchedAt } : null,
   };
 }
 

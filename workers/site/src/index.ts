@@ -1,8 +1,8 @@
 // swell.fyi (Cloudflare Worker): the static site in dist/, served by Workers static assets, with
 // each page's live data written into its HTML. The data is one small JSON file per page in R2
-// (pages/home.json, pages/spots/{id}.json), cut by the swell-data Worker's cron whenever its
-// sources change (scripts/lib/pages.ts). With it in the HTML, a page draws its numbers as soon as
-// its script runs, instead of after another round trip to data.swell.fyi.
+// (pages/home.json, pages/spots/{id}.json, pages/buoys/{id}.json), cut by the swell-data Worker's
+// cron whenever its sources change (scripts/lib/pages.ts). With it in the HTML, a page draws its
+// numbers as soon as its script runs, instead of after another round trip to data.swell.fyi.
 //
 // Only the paths in run_worker_first (wrangler.jsonc) come through here; everything else is
 // served as a plain static file. If the data is missing, the page goes out as built and fetches
@@ -23,8 +23,8 @@ const STALE_S = 600;
 
 function dataKey(path: string): string | null {
   if (path === "/") return "pages/home.json";
-  const spot = /^\/spots\/([\w-]+)\/$/.exec(path);
-  return spot ? `pages/spots/${spot[1]}.json` : null;
+  const page = /^\/(spots|buoys)\/([\w-]+)\/$/.exec(path);
+  return page ? `pages/${page[1]}/${page[2]}.json` : null;
 }
 
 async function pageData(env: Env, ctx: ExecutionContext, key: string): Promise<string | null> {
