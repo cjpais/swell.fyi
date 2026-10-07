@@ -9,7 +9,7 @@ import { makeConditions, roseSwells, swellNote, timelineRows } from "./condition
 import { createMap, marker, conditionOverlay } from "./map";
 import { PARTS, esc, legendHtml, slots, swIcon, tideAt, windChip, windIcon, windKey } from "./ui";
 import { HOUR as H, at, facesDeg, fetchSST, fetchSpotWind, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile, type Wind } from "./surf";
-import { cwaUrl, getCwa, loadSpotForecast, loadSpotTides, loadStations, type ForecastRow, type LiveStation } from "./data";
+import { cwaUrl, getCwa, loadSpotForecast, loadSpotTides, loadStations, loadWrfWind, type ForecastRow, type LiveStation } from "./data";
 
 type BuoyRef = { id: string; name: string; zh: string; lat: number; lon: number; km: number };
 type Built = { spot: { id: string; name: string; lat: number; lon: number; model: [number, number]; faces: string; cwaPoint: string }; buoys: BuoyRef[] };
@@ -18,13 +18,17 @@ type Payload = {
   cwa: { code: string; name: string; lat: number; lon: number; issued: string; rows: ForecastRow[] } | null;
   buoy: (BuoyRef & { hs: number | null; time: string | null }) | null;
   tide: { name: string; events: [string, string, number | null][] } | null;
+  wrf: Wrf[];
 };
+/** One CWA WRF run at this spot: 10 m wind every 6 h. */
+type Wrf = { id: string; short: string; color: string; dataId: string; label: string; init: string; lat: number; lon: number; t: number[]; speed: number[]; dir: number[] };
+const WRF_STYLE: Record<string, { short: string; color: string }> = { wrf3: { short: "WRF 3 km", color: "--s2" }, wrf15: { short: "WRF 15 km", color: "--s9" } };
 
 const $ = (id: string) => document.getElementById(id)!;
 
-/** The live pieces from the swell-data Worker: CWA's forecast, the tide, and the nearest working buoy. */
+/** The live pieces from the swell-data Worker: CWA's forecasts, the tide, and the nearest working buoy. */
 async function live(b: Built): Promise<Payload> {
-  const [rec, tides, stations] = await Promise.all([loadSpotForecast(), loadSpotTides(), loadStations().catch(() => [] as LiveStation[])]);
+  const [rec, tides, stations, wrf] = await Promise.all([loadSpotForecast(), loadSpotTides(), loadStations().catch(() => [] as LiveStation[]), loadWrfWind()]);
   const point = rec?.points[b.spot.cwaPoint];
   const byId = new Map(stations.map((s) => [s.id, s]));
   // Nearest buoy (in the spot's order) with a wave reading in the last 12 hours.
@@ -38,6 +42,10 @@ async function live(b: Built): Promise<Payload> {
     cwa: point && rec ? { code: b.spot.cwaPoint, name: point.name, lat: point.lat, lon: point.lon, issued: rec.issued, rows: point.rows } : null,
     buoy: working ? { ...working, hs: l!.values.wave_height_m, time: l!.time } : null,
     tide: tides?.[b.spot.id] ?? null,
+    wrf: Object.entries(WRF_STYLE).flatMap(([id, style]) => {
+      const run = wrf?.models[id as keyof typeof wrf.models], at = run?.spots[b.spot.id];
+      return run && at ? [{ id, ...style, dataId: run.dataId, label: run.label, init: run.init, lat: at.lat, lon: at.lon, t: run.time, speed: at.speed, dir: at.dir }] : [];
+    }),
   };
 }
 
@@ -155,6 +163,7 @@ function sourceTable(p: Payload, { now, sea, marine, wind }: { now: number; sea:
         ${p.cwa ? `<tr><td>CWA recreation forecast, ${esc(p.cwa.name)} (M-B0078-001)</td><td>CWA's own WW3 run: height, period, direction, every 3 h</td><td class="n">${fmt(cwaPeak)} m</td><td><a href="${cwaUrl("recreation.json")}">JSON</a></td></tr>` : ""}
         ${sea ? `<tr><td>${sea.label} via Open-Meteo</td><td>Total sea plus swell trains, hourly</td><td class="n">${fmt(peak(sea.time, sea.get("wave_height")))} m</td><td><a href="${esc(seaUrl)}">API</a></td></tr>` : `<tr><td>Open-Meteo marine</td><td colspan="3">Request failed${marine instanceof Error ? `: ${esc(marine.message)}` : ""}</td></tr>`}
         ${wind ? `<tr><td>ECMWF IFS via Open-Meteo</td><td>10 m wind and gusts, hourly</td><td class="n">${fmt(peak(wind.time, wind.wind_speed_10m))} m/s</td><td><a href="${esc(wind.url)}">API</a></td></tr>` : ""}
+        ${p.wrf.map((w) => `<tr><td>${esc(w.label)} (${w.dataId})</td><td>10 m wind, every 6 h to 84 h, run of ${whenLabel(Date.parse(w.init) / 1000)}</td><td class="n">${fmt(peak(w.t, w.speed))} m/s</td><td><a href="${cwaUrl("wrf-wind.json")}">JSON</a></td></tr>`).join("")}
         ${p.tide ? `<tr><td>CWA tide forecast, ${esc(p.tide.name)} (F-A0021-001)</td><td>High and low times; the curve between is interpolated</td><td class="n"></td><td><a href="${cwaUrl("tides.json")}">JSON</a></td></tr>` : ""}
       </tbody>
     </table>`;
@@ -179,7 +188,9 @@ function initCompare(p: Payload, marine: Grid | Error, wind: Grid | Error, obs: 
       const c = marine.cells[m.id];
       return `${m.short} ${c.lat.toFixed(2)}, ${c.lon.toFixed(2)} (${km(p.spot.lat, p.spot.lon, c.lat, c.lon).toFixed(0)} km)`;
     });
-    gridEl.textContent = parts.join("; ") + (wind instanceof Error ? "." : `; wind ${wind.lat.toFixed(2)}, ${wind.lon.toFixed(2)}.`);
+    if (!(wind instanceof Error)) parts.push(`wind ${wind.lat.toFixed(2)}, ${wind.lon.toFixed(2)}`);
+    for (const w of p.wrf) parts.push(`${w.short} ${w.lat.toFixed(2)}, ${w.lon.toFixed(2)} (${km(p.spot.lat, p.spot.lon, w.lat, w.lon).toFixed(0)} km)`);
+    gridEl.textContent = parts.join("; ") + ".";
   }
 
   // --- series builders ---
@@ -206,8 +217,12 @@ function initCompare(p: Payload, marine: Grid | Error, wind: Grid | Error, obs: 
           { label: "Wind waves", color: "--s8", t: g.time, v: g.get(`wind_wave_${kind}`, model), dash: [4, 3] },
         ];
 
-  const windSeries = (variable: string): Series[] =>
-    wind instanceof Error ? [] : WIND_MODELS.map((m) => ({ label: m.short, color: m.color, t: wind.time, v: wind.get(variable, m.id) }));
+  // CWA's WRF is 6-hourly, so its speed gets points like CWA's WW3. Direction charts are points already.
+  const windSeries = (variable: "wind_speed_10m" | "wind_direction_10m"): Series[] => [
+    ...(wind instanceof Error ? [] : WIND_MODELS.map((m) => ({ label: m.short, color: m.color, t: wind.time, v: wind.get(variable, m.id) }))),
+    ...p.wrf.map((w): Series =>
+      variable === "wind_speed_10m" ? { label: w.short, color: w.color, t: w.t, v: w.speed, style: "line+points" } : { label: w.short, color: w.color, t: w.t, v: w.dir }),
+  ];
 
   function draw() {
     charts.splice(0).forEach((c) => c.destroy());
@@ -253,6 +268,7 @@ function initCompare(p: Payload, marine: Grid | Error, wind: Grid | Error, obs: 
           add(`${m.short.toLowerCase()}_${v}`, marine.time, marine.get(v, m.id));
     if (!(wind instanceof Error))
       for (const m of WIND_MODELS) for (const v of ["wind_speed_10m", "wind_direction_10m", "wind_gusts_10m"]) add(`${m.id}_${v}`, wind.time, wind.get(v, m.id));
+    for (const w of p.wrf) { add(`cwa_${w.id}_wind_speed_10m`, w.t, w.speed); add(`cwa_${w.id}_wind_direction_10m`, w.t, w.dir); }
     if (tide) add("tide_m_interp", tide.t, tide.v.map((x) => +x.toFixed(3)));
     const times = [...new Set(cols.flatMap((c) => c.t))].sort((a, b) => a - b);
     const idx = cols.map((c) => new Map(c.t.map((t, i) => [t, c.v[i]])));

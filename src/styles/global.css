@@ -44,6 +44,7 @@
   --s6: var(--p1);     /* primary swell */
   --s7: var(--p2);     /* secondary swell */
   --s8: #bf8d00;       /* wind waves */
+  --s9: #1d8a6e;       /* CWA WRF 15 km (3 km uses --s2, CWA's colour) */
 
   /* Map. */
   --spot: #e2557c;

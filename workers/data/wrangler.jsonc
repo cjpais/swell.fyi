@@ -9,7 +9,7 @@
   "routes": [{ "pattern": "data.swell.fyi", "custom_domain": true }],
   "workers_dev": false,
   // Every 10 min: cheap checks of Open-Meteo's model metadata and CWA's S3 ETags. A part is
-  // only rebuilt when its upstream changed (field: ~6 times a day; CWA obs: hourly).
+  // only rebuilt when its upstream changed (field: ~6 times a day; CWA obs: hourly; WRF: 4 runs a day).
   "triggers": { "crons": ["*/10 * * * *"] },
   "limits": { "cpu_ms": 60000 },
   "observability": { "enabled": true }

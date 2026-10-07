@@ -3,14 +3,16 @@
 //
 //   GET /field.json        wave + wind field and per-spot series for the explore map (Open-Meteo)
 //   GET /cwa/...           CWA buoys, tides and forecast (see src/cwa.ts for the files), plus
-//                          each station's full archive at /cwa/csv/{id}.csv (uploaded by CI)
+//                          each station's full archive at /cwa/csv/{id}.csv (uploaded by CI),
+//                          and CWA's WRF wind at each spot at /cwa/wrf-wind.json
 //   GET /status            when each part was last built
 //   POST /refresh          rebuild now (Authorization: Bearer $REFRESH_TOKEN)
-//                          ?only=field|cwa to pick one, ?force=1 to rebuild even if current
+//                          ?only=field|cwa|wrf to pick one, ?force=1 to rebuild even if current
 //
 // A cron runs every 10 minutes. Each part checks cheaply whether its upstream changed (Open-Meteo
 // model metadata, CWA's S3 ETags) and only downloads and rebuilds when it has.
 import { buildField, latestRuns } from "../../../scripts/lib/field";
+import { buildWrf, wrfEtags, WRF_MODELS, type WrfFile } from "../../../scripts/lib/wrf";
 import { refreshCwa } from "./cwa";
 
 interface Env {
@@ -21,6 +23,7 @@ interface Env {
 }
 
 const FIELD = "data/field.json";
+const WRF = "cwa/wrf-wind.json";
 // The site, plus any local dev or preview port. The data is public and read-only.
 const allowed = (o: string) => o === "https://swell.fyi" || /^http:\/\/localhost:\d+$/.test(o);
 /** Rebuild the field anyway past this age, so the past-day/7-day window keeps sliding. */
@@ -44,10 +47,30 @@ async function refreshField(env: Env, force = false): Promise<string> {
   return `field.json rebuilt (wave run ${new Date(runs.wave * 1000).toISOString()}, wind run ${new Date(runs.wind * 1000).toISOString()})`;
 }
 
+/** CWA's WRF runs: rebuild a model when its last lead file changes, i.e. a new run has fully landed. */
+async function refreshWrf(env: Env, force = false): Promise<string[]> {
+  const etags = await wrfEtags();
+  const obj = await env.BUCKET.get(WRF);
+  const seen = (obj?.customMetadata?.etags ?? "").split(",");
+  const ids = WRF_MODELS.filter((m, i) => force || !etags[i] || etags[i] !== seen[i]).map((m) => m.id);
+  if (!ids.length) { await obj?.body.cancel(); return ["wrf-wind.json up to date"]; }
+  const prev = obj ? ((await obj.json()) as WrfFile) : null;
+  const { file, built, errors } = await buildWrf(prev, { ids });
+  if (built.length) {
+    // Record an ETag only for models that built, so the others retry on the next run.
+    const next = WRF_MODELS.map((m, i) => (built.includes(m.id) ? etags[i] : seen[i] ?? ""));
+    await env.BUCKET.put(WRF, JSON.stringify(file), { httpMetadata: { contentType: "application/json" }, customMetadata: { etags: next.join(",") } });
+  }
+  const log = built.map((id) => `${id} rebuilt (run ${file.models[id]!.init})`);
+  if (errors.length) throw new Error(`WRF refresh: ${errors.join("; ")}${log.length ? ` (done: ${log.join("; ")})` : ""}`);
+  return log;
+}
+
 async function refresh(env: Env, { only, force = false }: { only?: string | null; force?: boolean } = {}): Promise<string[]> {
   const jobs: [string, () => Promise<string | string[]>][] = [
     ["field", () => refreshField(env, force)],
     ["cwa", () => refreshCwa(env.BUCKET, { key: env.CWA_API_KEY || undefined, force })],
+    ["wrf", () => refreshWrf(env, force)],
   ];
   const results = await Promise.allSettled(jobs.filter(([name]) => !only || only === name).map(([, fn]) => fn()));
   const out = results.flatMap((r) => (r.status === "fulfilled" ? [r.value].flat() : [`FAILED ${(r.reason as Error).message}`]));
@@ -80,7 +103,7 @@ async function handle(url: URL, env: Env): Promise<Response> {
     return fromR2(env, `cwa/${file}`, file.endsWith(".csv") ? { "Content-Disposition": `attachment; filename="${file.split("/").pop()}"` } : {});
   }
   if (path === "/status") {
-    const [field, meta, index] = await Promise.all([env.BUCKET.head(FIELD), env.BUCKET.get("cwa/meta.json"), env.BUCKET.get("cwa/archive-index.json")]);
+    const [field, meta, index, wrf] = await Promise.all([env.BUCKET.head(FIELD), env.BUCKET.get("cwa/meta.json"), env.BUCKET.get("cwa/archive-index.json"), env.BUCKET.get(WRF)]);
     const m = field?.customMetadata ?? {};
     const iso = (s?: string) => (s ? new Date(Number(s) * 1000).toISOString() : null);
     const cwaMeta = meta ? ((await meta.json()) as { fetchedAt: string; checkedAt: string; datasets: unknown }) : null;
@@ -88,6 +111,7 @@ async function handle(url: URL, env: Env): Promise<Response> {
       field: field ? { builtAt: iso(m.builtAt), waveRun: iso(m.wave), windRun: iso(m.wind), bytes: field.size } : null,
       cwa: cwaMeta ? { fetchedAt: cwaMeta.fetchedAt, checkedAt: cwaMeta.checkedAt, datasets: cwaMeta.datasets } : null,
       archive: index ? { updatedAt: ((await index.json()) as { updatedAt: string }).updatedAt } : null,
+      wrf: wrf ? await wrf.json<WrfFile>().then((w) => ({ fetchedAt: w.fetchedAt, runs: Object.fromEntries(Object.entries(w.models).map(([id, m]) => [id, m!.init])) })) : null,
     });
   }
   return new Response("Not found", { status: 404 });

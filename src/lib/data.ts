@@ -26,12 +26,16 @@ export type CwaMeta = { fetchedAt: string; via: string; datasets: Record<string,
 export type ForecastRow = [string, number | null, number | null, number | null, number | null, number | null];
 export type SpotForecast = { issued: string; columns: string[]; points: Record<string, { name: string; lat: number; lon: number; rows: ForecastRow[] }> };
 export type SpotTide = { name: string; events: [string, string, number | null][] } | null;
+/** CWA's WRF runs at each spot (scripts/lib/wrf.ts): 10 m wind every 6 h to 84 h. */
+export type WrfRun = { dataId: string; label: string; init: string; time: number[]; spots: Record<string, { lat: number; lon: number; speed: number[]; dir: number[] }> };
+export type WrfWind = { fetchedAt: string; models: Partial<Record<"wrf15" | "wrf3", WrfRun>> };
 
 export const loadStations = () => getCwa<LiveStation[]>("stations.json");
 export const loadMeta = () => getCwa<CwaMeta>("meta.json");
 export const loadSpotForecast = () => tryCwa<SpotForecast>("spot-forecast.json");
 export const loadSpotTides = () => tryCwa<Record<string, SpotTide>>("spot-tides.json");
 export const loadRecentHs = () => tryCwa<Record<string, [number, number | null][]>>("recent-hs.json");
+export const loadWrfWind = () => tryCwa<WrfWind>("wrf-wind.json");
 
 /** A reading under 3 hours old. */
 export const isFresh = (t: string | null | undefined, nowS = Date.now() / 1000) => t != null && nowS - Date.parse(t) / 1000 < 3 * 3600;
