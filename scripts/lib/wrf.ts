@@ -266,4 +266,4 @@ export async function buildWrf(prev: WrfFile | null, { ids, log = () => {} }: { 
 
 /** Cheap change check: the last lead's ETag for each model. It is the last file a run writes. */
 export const wrfEtags = () =>
-  Promise.all(WRF_MODELS.map(async (m) => (await fetch(wrfUrl(m.dataId, WRF_LEADS.at(-1)!), { method: "HEAD" })).headers.get("etag") ?? ""));
+  Promise.all(WRF_MODELS.map(async (m) => (await fetch(wrfUrl(m.dataId, WRF_LEADS.at(-1)!), { method: "HEAD", cache: "no-store" })).headers.get("etag") ?? ""));

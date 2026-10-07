@@ -63,7 +63,9 @@ export const s3Url = (src: Source) => `${S3}/${src.s3Path}`;
 
 export async function download(src: Source, key?: string): Promise<Uint8Array> {
   const url = urlFor(src, key);
-  const res = await fetch(url);
+  // no-store: in a Worker, fetch() goes through Cloudflare's cache, which keeps .zip files for
+  // hours by default; the 48 h observations would lag CWA by up to two.
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`${src.id}: HTTP ${res.status} from ${key ? url.replace(key, "***") : url}`);
   return new Uint8Array(await res.arrayBuffer());
 }

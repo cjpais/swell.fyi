@@ -35,7 +35,7 @@ async function inBatches<T>(items: T[], n: number, fn: (x: T) => Promise<void>) 
 export async function refreshCwa(B: R2Bucket, { key, force = false }: { key?: string; force?: boolean } = {}): Promise<string[]> {
   const nowIso = new Date().toISOString();
   const state = (await getJson<State>(B, STATE)) ?? { etags: {} };
-  const etags = await Promise.all(LIVE.map(async (s) => (await fetch(s3Url(s), { method: "HEAD" })).headers.get("etag")));
+  const etags = await Promise.all(LIVE.map(async (s) => (await fetch(s3Url(s), { method: "HEAD", cache: "no-store" })).headers.get("etag")));
   const todo = new Set(LIVE.filter((s, i) => force || !etags[i] || etags[i] !== state.etags[s.id]).map((s) => s.id));
   const done = (s: Source) => { const e = etags[LIVE.indexOf(s)]; if (e) state.etags[s.id] = e; };
 
