@@ -1,5 +1,8 @@
 // Keeps the live CWA files in R2 (cwa/*) fresh. Each run HEADs CWA's four S3 objects and only
 // downloads and re-derives the ones whose ETag changed, so most runs cost four tiny requests.
+// The 48 h observations get a new ETag every ~10 minutes whether or not anything in them changed
+// (new readings come once an hour, 10-30 minutes after it, with the odd correction between), so
+// their readings are hashed too, and the windows only rewritten when those differ.
 //
 // Writers are split so nothing races:
 //   this Worker   cwa/stations.json, meta.json, obs/{id}.json (120-day windows), recent-hs.json,
@@ -15,7 +18,7 @@ import {
 
 type Station = StationMeta & { latest: Latest | null };
 type Meta = { fetchedAt: string | null; checkedAt: string; via: string; builder: string; datasets: Record<string, unknown> };
-type State = { etags: Record<string, string> };
+type State = { etags: Record<string, string>; obsHash?: string };
 
 const P = "cwa/";
 const STATE = "internal/cwa-state.json";
@@ -26,6 +29,11 @@ const getJson = async <T>(b: R2Bucket, key: string): Promise<T | null> => {
   return o ? ((await o.json()) as T) : null;
 };
 const putJson = (b: R2Bucket, key: string, v: unknown) => b.put(key, JSON.stringify(v), { httpMetadata: { contentType: "application/json" } });
+/** SHA-256 of every station's readings, in station order. */
+async function readingsHash(obs: Map<string, unknown[]>) {
+  const bytes = new TextEncoder().encode(JSON.stringify([...obs].sort(([a], [b]) => a.localeCompare(b))));
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
 
 /** Run `fn` over `items`, `n` at a time. */
 async function inBatches<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
@@ -61,6 +69,8 @@ export async function refreshCwa(B: R2Bucket, { key, force = false }: { key?: st
 
   await step(SOURCES.obs48h, async () => {
     const obs = parseObsZip(await download(SOURCES.obs48h, key));
+    const hash = await readingsHash(obs);
+    if (!force && hash === state.obsHash) return `${obs.size} stations, readings unchanged`;
     const index = await getJson<ArchiveIndex>(B, `${P}archive-index.json`);
     const cutoff = Date.now() - OBS_WINDOW_DAYS * 86400e3;
     const latest: Record<string, Latest | null> = {}, recent: Record<string, ArchiveRow[]> = {};
@@ -79,6 +89,7 @@ export async function refreshCwa(B: R2Bucket, { key, force = false }: { key?: st
     stationsDirty = true;
     meta.fetchedAt = nowIso;
     meta.datasets[SOURCES.obs48h.id] = { name: SOURCES.obs48h.name };
+    state.obsHash = hash;
     return `${obs.size} stations, ${added} new hourly rows`;
   });
   if (stationsDirty && stations) await putJson(B, `${P}stations.json`, stations);

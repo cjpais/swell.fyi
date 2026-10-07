@@ -8,9 +8,10 @@
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "taiwan-waves" }],
   "routes": [{ "pattern": "data.swell.fyi", "custom_domain": true }],
   "workers_dev": false,
-  // Every 10 min: cheap checks of Open-Meteo's model metadata and CWA's S3 ETags. A part is
+  // Every 20 min: cheap checks of Open-Meteo's model metadata and CWA's S3 ETags. A part is
   // only rebuilt when its upstream changed (field: ~6 times a day; CWA obs: hourly; WRF: 4 runs a day).
-  "triggers": { "crons": ["*/10 * * * *"] },
+  // At :05, :25 and :45: CWA publishes about 10 s past each 10-minute mark, so never race it.
+  "triggers": { "crons": ["5,25,45 * * * *"] },
   "limits": { "cpu_ms": 60000 },
   "observability": { "enabled": true }
   // Secrets: REFRESH_TOKEN (for POST /refresh); optional OPEN_METEO_API_KEY, CWA_API_KEY.

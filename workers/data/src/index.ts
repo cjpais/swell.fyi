@@ -11,7 +11,7 @@
 //   POST /refresh          rebuild now (Authorization: Bearer $REFRESH_TOKEN)
 //                          ?only=field|cwa|wrf|pages to pick one, ?force=1 to rebuild even if current
 //
-// A cron runs every 10 minutes. Each part checks cheaply whether its upstream changed (Open-Meteo
+// A cron runs every 20 minutes. Each part checks cheaply whether its upstream changed (Open-Meteo
 // model metadata, CWA's S3 ETags) and only downloads and rebuilds when it has. The pages go
 // last, and are rebuilt when any file they're cut from has changed.
 import { buildBuoyModels, buildField, latestRuns } from "../../../scripts/lib/field";

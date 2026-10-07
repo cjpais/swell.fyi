@@ -16,7 +16,7 @@ interface Env {
 /**
  * Edge cache for the data files. A copy under FRESH_S old is served as is; one under STALE_S is
  * still served, and refreshed from R2 behind it, so a visit rarely waits on R2 (~0.5 s from a
- * cold edge). The cron rewrites the files at most every 10 minutes.
+ * cold edge). The cron rewrites the files at most every 20 minutes.
  */
 const FRESH_S = 60;
 const STALE_S = 600;
