@@ -18,7 +18,7 @@ bun install
 bun run dev              # http://localhost:4747 (map tiles come from https://tiles.swell.fyi)
 ```
 
-The site is static and holds no readings. Every page loads its live data in the browser from the `swell-data` Worker at `https://data.swell.fyi` (buoys, tides, CWA's forecast, the map's model field), and spot and buoy pages also call Open-Meteo directly for the model comparisons. `bun run build` reads only the station list (names, IDs, positions), from the Worker, so a build needs no fetch first.
+The site is static and holds no readings. Its live data comes from the `swell-data` Worker at `https://data.swell.fyi` (buoys, tides, CWA's forecast, the model forecasts). The home and spot pages get theirs as one small file per page, which the site Worker writes into the HTML as it serves it, so their numbers draw without another round trip (in `astro dev`, the page fetches the same file instead). Other pages fetch from `data.swell.fyi` in the browser, and spot and buoy pages call Open-Meteo directly for the model comparison charts. `bun run build` reads only the station list (names, IDs, positions), from the Worker, so a build needs no fetch first.
 
 To work offline against local files instead:
 
@@ -26,6 +26,7 @@ To work offline against local files instead:
 bun run fetch            # CWA data → public/data/cwa/ (and grows data/archive/)
 bun run fetch:field      # map field → public/data/field.json
 bun run fetch:wrf        # CWA WRF spot winds → public/data/cwa/wrf-wind.json
+bun run fetch:pages      # each page's slice of the above → public/data/pages/
 PUBLIC_DATA_BASE=/data bun run dev
 ```
 
@@ -70,7 +71,7 @@ bun run bathymetry     # regenerate public/map/bathymetry.geojson (needs uv)
 
 | What | Where |
 |---|---|
-| Site | **https://swell.fyi**, a static Cloudflare Worker (`wrangler.jsonc`, assets only) |
+| Site | **https://swell.fyi**, static assets plus a small Worker (`wrangler.jsonc`, `workers/site`) that writes each page's data from R2 (`pages/*`) into the home and spot pages' HTML |
 | Basemap + terrain | `https://tiles.swell.fyi`, the `swell-tiles` Worker (`workers/tiles`) over R2 bucket `taiwan-waves` |
 | Live data | `https://data.swell.fyi`, the `swell-data` Worker (`workers/data`) over R2: `field.json` (map forecast) and `cwa/*` (buoys, tides, CWA forecast, archive CSVs). `/status` shows when each was built |
 | Archive | `taiwan-waves/archive/cwa-archive.tar.gz` in R2, plus `archive/daily/YYYY-MM-DD.tar.gz` copies (expire after 90 days) |
@@ -97,13 +98,14 @@ A cron runs every 10 minutes. Each part checks cheaply whether its upstream chan
 - **Map forecast, `field.json`:** a 0.5° wave + wind grid and per-spot MFWAM / ECMWF IFS series, about 350 Open-Meteo calls per build. It rebuilds when Open-Meteo's model metadata shows a new MFWAM or ECMWF IFS run, or the file is over 6 h old: about 6 builds and roughly 2k calls a day, under the free tier's 10k.
 - **CWA, `cwa/*`:** it HEADs CWA's four S3 files (buoy obs, stations, recreation forecast, tides) and re-derives only the ones whose ETag changed, usually the hourly obs file. Each station's last 120 days (`cwa/obs/{id}.json`) are kept by merging every new 48 h file in; the station list (`stations.json`), the home page sparklines (`recent-hs.json`), and per-spot slices of the forecast and tides (`spot-forecast.json`, `spot-tides.json`) are derived from them. The parsing lives in `scripts/lib/cwa.ts`, shared with `bun run fetch`.
 - **CWA WRF wind, `cwa/wrf-wind.json`:** 10 m wind at each spot's offshore `model` point from the 3 km and 15 km runs, every 6 h to 84 h. It HEADs each model's last lead file (+84 h, the last one a run writes, about 6 h after init) and rebuilds a model when its ETag changes. The GRIB2 files are 60–180 MB each, so the build reads only headers and the bytes around the spots with Range requests: about 140 small requests per model. The build lives in `scripts/lib/wrf.ts`, shared with `bun run fetch:wrf`.
+- **Page data, `pages/home.json` and `pages/spots/{id}.json`:** each page's slice of all of the above (CWA's forecast, tide, the working buoy's last two days, WRF, and the spot's entry in `field.json`), cut by `scripts/lib/pages.ts` after the other parts run, whenever one of their files has changed and at least hourly. The site Worker inlines them; `/pages/...` serves them to pages that weren't.
 - **Archive CSVs, `cwa/csv/*` and `cwa/archive-index.json`:** uploaded by `refresh.yml`, not the Worker. The Worker only reads the index, to show each station's archive size.
 
 ```sh
 bun run deploy:data                                                  # deploy the Worker (and its cron)
 npx wrangler tail swell-data                                         # watch runs
 curl https://data.swell.fyi/status                                   # when each part was last built
-curl -X POST -H "Authorization: Bearer $(cat ~/.config/swell/refresh-token)" "https://data.swell.fyi/refresh?force=1"   # rebuild now (&only=field|cwa|wrf)
+curl -X POST -H "Authorization: Bearer $(cat ~/.config/swell/refresh-token)" "https://data.swell.fyi/refresh?force=1"   # rebuild now (&only=field|cwa|wrf|pages)
 npx wrangler secret put OPEN_METEO_API_KEY -c workers/data/wrangler.jsonc   # optional, commercial plan
 npx wrangler secret put CWA_API_KEY -c workers/data/wrangler.jsonc          # optional
 ```
@@ -141,6 +143,8 @@ A key also unlocks the REST datastore, which filters by station, element and tim
 | `scripts/tiles.sh`, `scripts/tiles-upload.sh`, `scripts/bathymetry.py` | Build/upload the basemap and the depth contours |
 | `workers/tiles` | Tile server Worker (basemap + terrain, edge-cached) |
 | `workers/data`, `scripts/lib/field.ts` | Live data Worker (map forecast and CWA), and the field build it shares with `fetch:field` |
+| `scripts/lib/pages.ts` | Each page's data file, cut from the Worker's files; shared by the Worker and `fetch:pages` |
+| `workers/site` | The site's Worker: serves `dist/` and writes each page's data into the home and spot pages |
 | `scripts/lib/wrf.ts` | CWA WRF spot winds: GRIB2 header parsing, Lambert grid lookup, Range reads; shared by the Worker and `fetch:wrf` |
 
 Archive columns: `time` (ISO, +08:00), `wave_height_m` (Hs), `wave_dir_deg` (from), `wave_period_s` (mean period, not peak), `sea_temp_c`, `air_temp_c`, `pressure_hpa`, `wind_speed_ms`, `wind_dir_deg` (from), `wind_gust_ms`, `tide_height_m` (TWVD2001), `current_dir_deg` (toward), `current_speed_ms`, `source`.

@@ -10,8 +10,9 @@ export function getStaticPaths() {
   return SPOTS.map((spot) => ({ params: { id: spot.id }, props: { spot } }));
 }
 
-// The nearby buoys are built in; which one is working, its readings, CWA's forecast and the
-// tide all load live in the browser (src/lib/spot-page.ts).
+// The nearby buoys are built in; which one is working, its readings, CWA's forecast, the tide
+// and the model forecast come in the page's data, which the site Worker writes into the HTML.
+// The comparison charts load the three models from Open-Meteo (src/lib/spot-page.ts).
 const { spot } = Astro.props as { spot: Spot };
 const stations = await stationList();
 const buoys = spot.buoys

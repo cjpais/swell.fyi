@@ -1,13 +1,19 @@
 {
-  // Static site on Cloudflare Workers (assets only, no server code).
+  // swell.fyi: the static site (dist/) on Workers static assets, plus a small Worker
+  // (workers/site) that writes each page's live data into its HTML. Only the pages that carry
+  // data run it; everything else is served straight from the assets.
   // Deploy: bun run build && npx wrangler deploy
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "swell-fyi",
+  "main": "workers/site/src/index.ts",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "404-page"
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/", "/spots/*"]
   },
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "taiwan-waves" }],
   "routes": [{ "pattern": "swell.fyi", "custom_domain": true }],
   "workers_dev": false
 }

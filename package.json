@@ -14,6 +14,7 @@
     "fetch:backfill": "bun scripts/fetch-cwa.ts --backfill",
     "fetch:field": "bun scripts/fetch-field.ts",
     "fetch:wrf": "bun scripts/fetch-wrf.ts",
+    "fetch:pages": "bun scripts/build-pages.ts",
     "backfill:history": "bun scripts/backfill-ocean.ts && bun scripts/fetch-cwa.ts",
     "tiles": "bash scripts/tiles.sh",
     "bathymetry": "uv run scripts/bathymetry.py",

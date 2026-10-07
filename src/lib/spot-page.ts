@@ -1,51 +1,40 @@
 import type uPlot from "uplot";
 import { renderChart, sec, type Series } from "./chart";
-import { fetchMarine, fetchWind, partitioned, WAVE_MODELS, WIND_MODELS, km, type Grid, type Partitioned as Sea } from "./openmeteo";
+import { fetchMarine, fetchWind, WAVE_MODELS, WIND_MODELS, km, type Grid, type Partitioned as Sea } from "./openmeteo";
 import { toCsv, downloadText } from "./csv";
 import { fmt, compass } from "./format";
 import { renderCompass } from "./compass";
 import { renderTimeline } from "./timeline";
-import { makeConditions, roseSwells, swellNote, timelineRows } from "./conditions";
+import { makeConditions, roseSwells, swellNote, timelineRows, type WindSeries } from "./conditions";
 import { createMap, marker, conditionOverlay } from "./map";
 import { PARTS, esc, legendHtml, slots, swIcon, tideAt, windChip, windIcon, windKey } from "./ui";
-import { HOUR as H, at, facesDeg, fetchSST, fetchSpotWind, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile, type Wind } from "./surf";
-import { cwaUrl, getCwa, loadSpotForecast, loadSpotTides, loadStations, loadWrfWind, type ForecastRow, type LiveStation } from "./data";
+import { HOUR as H, at, facesDeg, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile } from "./surf";
+import { DATA, cwaUrl, getCwa, loadPage, type SpotPageData } from "./data";
 
 type BuoyRef = { id: string; name: string; zh: string; lat: number; lon: number; km: number };
 type Built = { spot: { id: string; name: string; lat: number; lon: number; model: [number, number]; faces: string; cwaPoint: string }; buoys: BuoyRef[] };
 type Payload = {
   spot: Built["spot"];
-  cwa: { code: string; name: string; lat: number; lon: number; issued: string; rows: ForecastRow[] } | null;
+  cwa: SpotPageData["cwa"];
   buoy: (BuoyRef & { hs: number | null; time: string | null }) | null;
-  tide: { name: string; events: [string, string, number | null][] } | null;
+  tide: SpotPageData["tide"];
   wrf: Wrf[];
 };
 /** One CWA WRF run at this spot: 10 m wind every 6 h. */
-type Wrf = { id: string; short: string; color: string; dataId: string; label: string; init: string; lat: number; lon: number; t: number[]; speed: number[]; dir: number[] };
-const WRF_STYLE: Record<string, { short: string; color: string }> = { wrf3: { short: "WRF 3 km", color: "--s2" }, wrf15: { short: "WRF 15 km", color: "--s9" } };
+type Wrf = SpotPageData["wrf"][number] & { short: string; color: string };
+const WRF_STYLE: Record<Wrf["id"], { short: string; color: string }> = { wrf3: { short: "WRF 3 km", color: "--s2" }, wrf15: { short: "WRF 15 km", color: "--s9" } };
 
 const $ = (id: string) => document.getElementById(id)!;
 
-/** The live pieces from the swell-data Worker: CWA's forecasts, the tide, and the nearest working buoy. */
-async function live(b: Built): Promise<Payload> {
-  const [rec, tides, stations, wrf] = await Promise.all([loadSpotForecast(), loadSpotTides(), loadStations().catch(() => [] as LiveStation[]), loadWrfWind()]);
-  const point = rec?.points[b.spot.cwaPoint];
-  const byId = new Map(stations.map((s) => [s.id, s]));
-  // Nearest buoy (in the spot's order) with a wave reading in the last 12 hours.
-  const working = b.buoys.find((x) => {
-    const l = byId.get(x.id)?.latest;
-    return l?.values.wave_height_m != null && Date.now() - Date.parse(l.time) < 12 * 36e5;
-  });
-  const l = working ? byId.get(working.id)!.latest! : null;
+/** The page's live data (scripts/lib/pages.ts), with the buoy's name and distance from the build. */
+function payload(b: Built, d: SpotPageData | null): Payload {
+  const ref = d?.buoy ? b.buoys.find((x) => x.id === d.buoy!.id) : undefined;
   return {
     spot: b.spot,
-    cwa: point && rec ? { code: b.spot.cwaPoint, name: point.name, lat: point.lat, lon: point.lon, issued: rec.issued, rows: point.rows } : null,
-    buoy: working ? { ...working, hs: l!.values.wave_height_m, time: l!.time } : null,
-    tide: tides?.[b.spot.id] ?? null,
-    wrf: Object.entries(WRF_STYLE).flatMap(([id, style]) => {
-      const run = wrf?.models[id as keyof typeof wrf.models], at = run?.spots[b.spot.id];
-      return run && at ? [{ id, ...style, dataId: run.dataId, label: run.label, init: run.init, lat: at.lat, lon: at.lon, t: run.time, speed: at.speed, dir: at.dir }] : [];
-    }),
+    cwa: d?.cwa ?? null,
+    buoy: ref && d?.buoy ? { ...ref, hs: d.buoy.hs, time: d.buoy.time } : null,
+    tide: d?.tide ?? null,
+    wrf: (d?.wrf ?? []).map((w) => ({ ...w, ...WRF_STYLE[w.id] })),
   };
 }
 
@@ -58,9 +47,14 @@ function buoyLine(p: Payload, all: BuoyRef[]) {
 }
 
 export async function initSpot(built: Built) {
-  const p = await live(built);
+  const s = built.spot;
+  // The charts' three models come straight from Open-Meteo and only need the spot: start now.
+  const marineReq = fetchMarine(s.model[0], s.model[1], 3, 10).catch((e: Error) => e);
+  const modelsReq = fetchWind(s.lat, s.lon, 3, 10).catch((e: Error) => e);
+  // Everything above the charts comes in the page's own data, usually already in the HTML.
+  const d = await loadPage<SpotPageData>(`spots/${s.id}`);
+  const p = payload(built, d);
   buoyLine(p, built.buoys);
-  const s = p.spot;
   const now = nowS();
   const faces = facesDeg(s.faces);
   const buoyName = p.buoy?.name ?? null;
@@ -73,15 +67,11 @@ export async function initSpot(built: Built) {
   if (p.buoy) marker(map, [p.buoy.lon, p.buoy.lat], `<span>${esc(p.buoy.name)} buoy</span>`, "map-tag tag-buoy", `/buoys/${p.buoy.id}/`);
   marker(map, [s.lon, s.lat], `<span>${esc(s.name.replace(/ \(.*\)$/, ""))}</span>`, "map-tag tag-spot");
 
-  const [marine, models, wind, obsFile, sst] = await Promise.all([
-    fetchMarine(s.model[0], s.model[1], 3, 10).catch((e: Error) => e),
-    fetchWind(s.lat, s.lon, 3, 10).catch((e: Error) => e),
-    fetchSpotWind(s.lat, s.lon, { past: 1, days: 7 }).catch(() => null),
-    p.buoy ? getCwa<ObsFile>(`obs/${p.buoy.id}.json`).catch(() => null) : Promise.resolve(null),
-    fetchSST(s.model[0], s.model[1]).catch(() => null),
-  ]);
-  const sea = partitioned(marine);
-  const obs = obsTable(obsFile);
+  // MFWAM sea (GFS-Wave where MFWAM has no cell), ECMWF IFS wind and SST, from field.json.
+  const m = d?.model;
+  const sea: Sea | null = m ? { label: m.wave.label, time: m.wave.time, get: (v) => (m.wave[v] as (number | null)[] | undefined) ?? m.wave.time.map(() => null) } : null;
+  const wind = m?.wind ?? null, sst = m?.sst ?? null;
+  const obs = obsTable(d?.obs ?? null);
   const obsHs = obs?.col("wave_height_m") ?? [];
   const lastObs = obs ? obs.t.findLast((_, i) => obsHs[i] != null) ?? null : null;
 
@@ -112,7 +102,7 @@ export async function initSpot(built: Built) {
     const [tMain, tSub] = tideAt(tide, ts);
     R.text("tide", tMain); R.text("tide-sub", tSub);
     const wt = obs && lastObs != null && ts <= lastObs + H ? at(obs.t, obs.col("sea_temp_c"), ts, 3 * H) : null;
-    const wm = sst ? at(sst.time, sst.sea_surface_temperature, ts) : null;
+    const wm = sst ? at(sst.time, sst.v, ts) : null;
     R.text("water", wt != null ? `${fmt(wt)} °C` : wm != null ? `${fmt(wm)} °C` : "–");
     R.text("water-sub", wt != null ? `Measured at ${buoyName} buoy` : wm != null ? "Sea surface, model" : "");
     renderCompass($("rose"), { faces, swells: roseSwells(parts), wind: w, label: `Swell from ${compass(parts[0].dir)}, wind from ${compass(w?.dir)}` });
@@ -141,28 +131,29 @@ export async function initSpot(built: Built) {
   const rows = timelineRows({ sea, wind, obs, tide, tideName: p.tide?.name, faces });
   renderTimeline($("timeline"), { t0: now - 24 * H, t1: now + 6 * 24 * H, now, sun: wind?.sun ?? [], rows, onScrub: show, tip });
 
-  sourceTable(p, { now, sea, marine, wind });
+  sourceTable(p, { now, sea, wind });
 
   // ---------- every source, side by side ----------
+  const [marine, models, obsFile] = await Promise.all([marineReq, modelsReq, p.buoy ? getCwa<ObsFile>(`obs/${p.buoy.id}.json`).catch(() => null) : null]);
   initCompare(p, marine, models, obsFile, tide);
 }
 
-function sourceTable(p: Payload, { now, sea, marine, wind }: { now: number; sea: Sea | null; marine: Grid | Error; wind: Wind | null }) {
+function sourceTable(p: Payload, { now, sea, wind }: { now: number; sea: Sea | null; wind: WindSeries | null }) {
   const peak = (t: number[], v: (number | null)[]) => {
     let m: number | null = null;
     t.forEach((ts, i) => { const x = v[i]; if (ts >= now && ts <= now + 24 * H && x != null && (m == null || x > m)) m = x; });
     return m;
   };
   const cwaPeak = p.cwa ? peak(p.cwa.rows.map((r) => Date.parse(r[0]) / 1000), p.cwa.rows.map((r) => r[1])) : null;
-  const seaUrl = marine instanceof Error ? "" : marine.url;
+  const pageUrl = `${DATA}/pages/spots/${p.spot.id}.json`;
   $("source-table").innerHTML = `
     <table class="data">
       <thead><tr><th>Source</th><th>What it gives</th><th class="n">Next 24 h peak</th><th>Raw data</th></tr></thead>
       <tbody>
         ${p.buoy ? `<tr><td>${esc(p.buoy.name)} buoy (CWA O-B0075)</td><td>Measured height, period, direction, water temperature</td><td class="n">${fmt(p.buoy.hs)} m at ${p.buoy.time ? hhmm(Date.parse(p.buoy.time) / 1000) : "–"}</td><td><a href="${cwaUrl(`obs/${p.buoy.id}.json`)}">JSON</a>, <a href="${cwaUrl(`csv/${p.buoy.id}.csv`)}">CSV</a></td></tr>` : ""}
         ${p.cwa ? `<tr><td>CWA recreation forecast, ${esc(p.cwa.name)} (M-B0078-001)</td><td>CWA's own WW3 run: height, period, direction, every 3 h</td><td class="n">${fmt(cwaPeak)} m</td><td><a href="${cwaUrl("recreation.json")}">JSON</a></td></tr>` : ""}
-        ${sea ? `<tr><td>${sea.label} via Open-Meteo</td><td>Total sea plus swell trains, hourly</td><td class="n">${fmt(peak(sea.time, sea.get("wave_height")))} m</td><td><a href="${esc(seaUrl)}">API</a></td></tr>` : `<tr><td>Open-Meteo marine</td><td colspan="3">Request failed${marine instanceof Error ? `: ${esc(marine.message)}` : ""}</td></tr>`}
-        ${wind ? `<tr><td>ECMWF IFS via Open-Meteo</td><td>10 m wind and gusts, hourly</td><td class="n">${fmt(peak(wind.time, wind.wind_speed_10m))} m/s</td><td><a href="${esc(wind.url)}">API</a></td></tr>` : ""}
+        ${sea ? `<tr><td>${sea.label} via Open-Meteo</td><td>Total sea plus swell trains, hourly</td><td class="n">${fmt(peak(sea.time, sea.get("wave_height")))} m</td><td><a href="${pageUrl}">JSON</a></td></tr>` : `<tr><td>Open-Meteo marine</td><td colspan="3">Unavailable right now</td></tr>`}
+        ${wind ? `<tr><td>ECMWF IFS via Open-Meteo</td><td>10 m wind and gusts, hourly</td><td class="n">${fmt(peak(wind.time, wind.wind_speed_10m))} m/s</td><td><a href="${pageUrl}">JSON</a></td></tr>` : ""}
         ${p.wrf.map((w) => `<tr><td>${esc(w.label)} (${w.dataId})</td><td>10 m wind, every 6 h to 84 h, run of ${whenLabel(Date.parse(w.init) / 1000)}</td><td class="n">${fmt(peak(w.t, w.speed))} m/s</td><td><a href="${cwaUrl("wrf-wind.json")}">JSON</a></td></tr>`).join("")}
         ${p.tide ? `<tr><td>CWA tide forecast, ${esc(p.tide.name)} (F-A0021-001)</td><td>High and low times; the curve between is interpolated</td><td class="n"></td><td><a href="${cwaUrl("tides.json")}">JSON</a></td></tr>` : ""}
       </tbody>

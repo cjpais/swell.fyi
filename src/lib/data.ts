@@ -1,6 +1,7 @@
 // Where the browser reads live data: the swell-data Worker (workers/data). Model forecasts
-// at /field.json, CWA's buoys, tides and forecast under /cwa/. PUBLIC_DATA_BASE=/data reads
-// the local copies that `bun run fetch` and `bun run fetch:field` write into public/data/.
+// at /field.json, CWA's buoys, tides and forecast under /cwa/, and each page's slice of them
+// under /pages/. PUBLIC_DATA_BASE=/data reads the local copies that `bun run fetch`,
+// `bun run fetch:field` and `bun run fetch:pages` write into public/data/.
 export const DATA = (import.meta.env.PUBLIC_DATA_BASE || "https://data.swell.fyi").replace(/\/$/, "");
 export const cwaUrl = (path: string) => `${DATA}/cwa/${path}`;
 
@@ -32,10 +33,19 @@ export type WrfWind = { fetchedAt: string; models: Partial<Record<"wrf15" | "wrf
 
 export const loadStations = () => getCwa<LiveStation[]>("stations.json");
 export const loadMeta = () => getCwa<CwaMeta>("meta.json");
-export const loadSpotForecast = () => tryCwa<SpotForecast>("spot-forecast.json");
 export const loadSpotTides = () => tryCwa<Record<string, SpotTide>>("spot-tides.json");
-export const loadRecentHs = () => tryCwa<Record<string, [number, number | null][]>>("recent-hs.json");
-export const loadWrfWind = () => tryCwa<WrfWind>("wrf-wind.json");
+
+// ---------- one file per page (scripts/lib/pages.ts builds them) ----------
+export type { SpotPageData, HomePageData } from "../../scripts/lib/pages";
+
+/** A page's live data: written into its HTML by the site Worker (workers/site), else fetched. */
+export function loadPage<T>(path: string): Promise<T | null> {
+  const el = document.getElementById("page-data");
+  if (el?.textContent) {
+    try { return Promise.resolve(JSON.parse(el.textContent) as T); } catch {}
+  }
+  return getJson<T>(`${DATA}/pages/${path}.json`).catch(() => null);
+}
 
 /** A reading under 3 hours old. */
 export const isFresh = (t: string | null | undefined, nowS = Date.now() / 1000) => t != null && nowS - Date.parse(t) / 1000 < 3 * 3600;

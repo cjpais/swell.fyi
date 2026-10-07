@@ -29,25 +29,12 @@ export async function fetchSea(lat: number, lon: number, { past = 1, days = 7 } 
   throw new Error("Open-Meteo returned no wave data");
 }
 
-/** Hourly sea-surface temperature (Open-Meteo's default marine model; MFWAM doesn't carry it). */
-export async function fetchSST(lat: number, lon: number): Promise<Hourly> {
-  const j = await json(`https://marine-api.open-meteo.com/v1/marine?${qs({ latitude: lat.toFixed(4), longitude: lon.toFixed(4), hourly: "sea_surface_temperature", past_days: 1, forecast_days: 7, timeformat: "unixtime", timezone: "GMT" })}`);
-  return j.hourly;
-}
-
 export type Wind = Hourly & { url: string; lat: number; lon: number; sun: [number, number][]; wind_speed_10m: Series; wind_direction_10m: Series; wind_gusts_10m: Series };
 /** Hourly 10 m wind (ECMWF IFS) plus sunrise/sunset. */
 export async function fetchSpotWind(lat: number, lon: number, { past = 1, days = 7 } = {}): Promise<Wind> {
   const url = `https://api.open-meteo.com/v1/forecast?${qs({ latitude: lat.toFixed(4), longitude: lon.toFixed(4), hourly: "wind_speed_10m,wind_direction_10m,wind_gusts_10m", daily: "sunrise,sunset", models: "ecmwf_ifs025", past_days: past, forecast_days: days, wind_speed_unit: "ms", timeformat: "unixtime", timezone: "GMT" })}`;
   const j = await json(url);
   return { url, lat: j.latitude, lon: j.longitude, ...j.hourly, sun: (j.daily?.sunrise ?? []).map((r: number, i: number) => [r, j.daily.sunset[i]]) };
-}
-
-/** Wind for many points in one request (home page). One hourly record per point. */
-export async function fetchManyWind(points: [number, number][], { days = 3 } = {}): Promise<Hourly[]> {
-  const lat = points.map((p) => p[0].toFixed(3)).join(","), lon = points.map((p) => p[1].toFixed(3)).join(",");
-  const j = await json(`https://api.open-meteo.com/v1/forecast?${qs({ latitude: lat, longitude: lon, hourly: "wind_speed_10m,wind_direction_10m", models: "ecmwf_ifs025", forecast_days: days, wind_speed_unit: "ms", timeformat: "unixtime", timezone: "GMT" })}`);
-  return (Array.isArray(j) ? j : [j]).map((w: any) => w.hourly);
 }
 
 // ---------- geometry ----------

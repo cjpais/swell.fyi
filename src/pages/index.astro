@@ -1,6 +1,6 @@
 ---
 // Home. The structure is static; every number (CWA's forecast strips, buoy readings, wind)
-// loads in the browser from the swell-data Worker (see src/lib/home-page.ts).
+// comes in the page's data, which the site Worker writes into the HTML (see src/lib/home-page.ts).
 import Base from "../layouts/Base.astro";
 import { stationList, isWaveStation } from "../lib/local";
 import { SPOTS, REGIONS } from "../data/spots";
