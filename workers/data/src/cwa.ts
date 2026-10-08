@@ -13,12 +13,13 @@
 import {
   SOURCES, OBS_WINDOW_DAYS, s3Url, download, downloadJson, parseStations, parseObsZip, parseRecreation, parseTides,
   mergeRows, latestOf, archiveInfo, obsFile, recentHs, spotTides, spotForecast, withLatest,
-  type ArchiveIndex, type ArchiveRow, type Latest, type Source, type StationMeta,
+  type ArchiveIndex, type ArchiveRow, type Latest, type Recreation, type Source, type StationMeta, type TideLocation,
 } from "../../../scripts/lib/cwa";
+import { SPOTS } from "../../../src/data/spots";
 
 type Station = StationMeta & { latest: Latest | null };
 type Meta = { fetchedAt: string | null; checkedAt: string; via: string; builder: string; datasets: Record<string, unknown> };
-type State = { etags: Record<string, string>; obsHash?: string };
+type State = { etags: Record<string, string>; obsHash?: string; spotIds?: string };
 
 const P = "cwa/";
 const STATE = "internal/cwa-state.json";
@@ -43,6 +44,8 @@ async function inBatches<T>(items: T[], n: number, fn: (x: T) => Promise<void>) 
 export async function refreshCwa(B: R2Bucket, { key, force = false }: { key?: string; force?: boolean } = {}): Promise<string[]> {
   const nowIso = new Date().toISOString();
   const state = (await getJson<State>(B, STATE)) ?? { etags: {} };
+  // The spot list can change while CWA's tide file does not, so its ids are tracked separately.
+  const spotIds = SPOTS.map((s) => s.id).join(",");
   const etags = await Promise.all(LIVE.map(async (s) => (await fetch(s3Url(s), { method: "HEAD", cache: "no-store" })).headers.get("etag")));
   const todo = new Set(LIVE.filter((s, i) => force || !etags[i] || etags[i] !== state.etags[s.id]).map((s) => s.id));
   const done = (s: Source) => { const e = etags[LIVE.indexOf(s)]; if (e) state.etags[s.id] = e; };
@@ -109,6 +112,22 @@ export async function refreshCwa(B: R2Bucket, { key, force = false }: { key?: st
     meta.datasets[SOURCES.tides.id] = { name: SOURCES.tides.name, sent };
     return `${tides.locations.length} locations`;
   });
+
+  // CWA's own files only change when it republishes them, so a new or renamed spot would keep
+  // the old per-spot cuts: re-cut them from the stored sources whenever the spot list moves.
+  if (state.spotIds !== spotIds) {
+    const [tides, rec] = await Promise.all([
+      getJson<{ locations: TideLocation[] }>(B, `${P}tides.json`),
+      getJson<Recreation>(B, `${P}recreation.json`),
+    ]);
+    const cut: string[] = [];
+    if (tides?.locations) { await putJson(B, `${P}spot-tides.json`, spotTides(tides.locations)); cut.push("spot-tides.json"); }
+    if (rec) { await putJson(B, `${P}spot-forecast.json`, spotForecast(rec)); cut.push("spot-forecast.json"); }
+    if (cut.length) {
+      state.spotIds = spotIds;
+      log.push(`${cut.join(", ")}: re-cut for ${SPOTS.length} spots`);
+    }
+  }
 
   await putJson(B, `${P}meta.json`, meta);
   await putJson(B, STATE, state);
