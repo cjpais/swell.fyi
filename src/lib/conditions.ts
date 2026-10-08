@@ -15,7 +15,7 @@ export function makeConditions(sea: SeaSeries | null, wind: WindSeries | null, f
     const parts = PARTS.map((pt) => {
       const h = sea ? at(sea.time, sea.get(`${pt.key}_height`), ts) : null, dir = sea ? at(sea.time, sea.get(`${pt.key}_direction`), ts) : null;
       const exposure = swellExposure(dir, faces, window);
-      return { ...pt, h, dir, period: sea ? at(sea.time, sea.get(`${pt.key}_period`), ts) : null, exposure, blocked: exposure === "blocked" };
+      return { ...pt, h, dir, period: sea ? at(sea.time, sea.get(`${pt.key}_period`), ts) : null, exposure };
     });
     let w = null;
     if (wind) {
@@ -28,16 +28,7 @@ export function makeConditions(sea: SeaSeries | null, wind: WindSeries | null, f
 export type Conditions = ReturnType<ReturnType<typeof makeConditions>>;
 export type Parts = Conditions["parts"];
 
-/** The model's number is open-ocean sea state. When the swell can't reach the beach, say so. */
-export function swellNote(parts: Parts) {
-  const big = parts.filter((x) => x.h != null && x.h >= 0.2);
-  if (!big.length) return "";
-  if (big.every((x) => x.blocked)) return "Swell is blocked here. Expect much smaller surf.";
-  if (big.every((x) => x.blocked || x.exposure === "wrapping")) return "Swell only wraps in. Expect smaller surf.";
-  return "";
-}
-
-export const roseSwells = (parts: Parts) => parts.map((x) => ({ dir: x.dir, h: x.h, period: x.period, cls: x.cls, name: x.name, blocked: x.blocked }));
+export const roseSwells = (parts: Parts) => parts.map((x) => ({ dir: x.dir, h: x.h, period: x.period, cls: x.cls, name: x.name }));
 
 /** The stacked rows under a spot: height (+ buoy), swell arrows, wind, tide. */
 export function timelineRows(o: { sea: SeaSeries | null; wind: WindSeries | null; obs: ObsTable | null; tide: Tide | null; tideName?: string; faces: number | null }): Row[] {

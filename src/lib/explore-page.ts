@@ -185,7 +185,7 @@ export async function initExplore(root: HTMLElement, p: Payload) {
     if (c.w?.dir != null) tags.push({ dir: c.w.dir, cls: "wind", text: `Wind ${fmt(c.w.speed, 0)} m/s` });
     // No coastline or swell window yet: each spot's bounds still need picking by hand.
     // The spot's swell window on the rose; the map underneath already shows the coast.
-    renderCompass(rose, { faces: facesDeg(sel.faces), window: sel.swell, swells: c.parts.map((x) => ({ dir: x.dir, h: x.h, cls: x.cls, blocked: x.blocked })), wind: c.w, tags, label: "" });
+    renderCompass(rose, { faces: facesDeg(sel.faces), window: sel.swell, swells: c.parts.map((x) => ({ dir: x.dir, h: x.h, cls: x.cls })), wind: c.w, tags, label: "" });
     placeRose();
   }
 

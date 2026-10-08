@@ -302,7 +302,6 @@ function startHero(p: Payload) {
       R.text("ms-src", measured ? `${p.name} buoy` : "After the last reading");
       R.text("fc-hs", fmt(sea ? at(sea.time, sea.get("wave_height"), ts) : null));
       R.text("fc-src", sea ? `${sea.label}, same spot` : "Model unavailable");
-      R.text("note", "");
       R.text("waves", hs != null ? `${fmt(tp)} s from ${compass(dir)}` : "No reading");
       R.text("waves-sub", hs != null ? "Mean period, measured" : "");
       parts.forEach((x, i) => {

@@ -91,7 +91,7 @@ export function swellExposure(from: number | null | undefined, faces: number | n
   if (d <= 95) return "wrapping";
   return "blocked";
 }
-const EXPOSURE: Record<string, string> = { best: "From its best direction", works: "From a direction it works in", blocked: "Blocked here", "straight in": "Straight in", "angled in": "Angled in", wrapping: "Wrapping in" };
+const EXPOSURE: Record<string, string> = { best: "From its best direction", works: "From a direction it works in", "straight in": "Straight in", "angled in": "Angled in", wrapping: "Wrapping in" };
 /** The exposure in words, for a readout. */
 export const exposureText = (e: string) => EXPOSURE[e] ?? "";
 

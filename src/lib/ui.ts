@@ -35,7 +35,6 @@ export function readoutShell({ measuredLabel = "Measured", forecastLabel = "Fore
   return `
     <p class="ro-when"><span class="ro-kind" data-k="kind">&nbsp;</span> <span data-k="when"></span></p>
     <div class="ro-pair">${cols}</div>
-    <p class="ro-note" data-k="note">&nbsp;</p>
     <dl class="ro-list">
       ${rows.map(([k, icon, label]) => `<div class="ro-item" data-row="${k}"><dt>${icon}${label}</dt><dd><span class="ro-main" data-k="${k}">–</span><span class="ro-sub2" data-k="${k}-sub">&nbsp;</span></dd></div>`).join("")}
     </dl>`;

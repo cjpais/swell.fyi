@@ -174,7 +174,7 @@ export function spotCallouts(map: MlMap, spots: Callout[]) {
 // always a thin ink line with an open head and knot barbs. Three swell drawing styles,
 // all with the same map key and direct labels.
 
-export type OverlaySwell = { dir: number | null; h: number | null; period: number | null; cls: string; name: string; blocked?: boolean };
+export type OverlaySwell = { dir: number | null; h: number | null; period: number | null; cls: string; name: string };
 export type OverlayWind = { dir: number | null; speed: number | null; label?: string; tone?: string } | null;
 export type OverlayState = { faces?: number | null; swells: OverlaySwell[]; wind: OverlayWind };
 
@@ -262,11 +262,10 @@ export function conditionOverlay(map: MlMap, lngLat: [number, number]) {
     swells.forEach((s, i) => {
       const [ux, uy] = u(s.dir), nx = -uy, ny = ux;
       const off = i === 0 ? 0 : 22 * (i % 2 ? 1 : -1);
-      const blocked = s.blocked ? " blocked" : "";
       if (mode === "arrows") {
         const r0 = i === 0 ? 165 : 130, w = Math.max(5, Math.min(18, 4 + s.h * 7));
         const a: [number, number] = [cx + ux * r0 + nx * off, cy + uy * r0 + ny * off], b: [number, number] = [cx + ux * 24 + nx * off * 0.4, cy + uy * 24 + ny * off * 0.4];
-        out.push(`<path class="m-swell ${s.cls}${blocked}" d="${blockArrow(a, b, w)}"/>`);
+        out.push(`<path class="m-swell ${s.cls}" d="${blockArrow(a, b, w)}"/>`);
         label(a[0] + ux * 10, a[1] + uy * 10, `${s.name} ${fx(s.h)} m`, anchorFor(s.dir));
       } else if (mode === "crests") {
         const gap = Math.max(10, Math.min(26, (s.period ?? 6) * 2.1)), w = Math.max(1.5, Math.min(6, s.h * 3.2));
@@ -274,7 +273,7 @@ export function conditionOverlay(map: MlMap, lngLat: [number, number]) {
         for (let k = 0; k < 4; k++) {
           const r = base + k * gap, span = (i === 0 ? 26 : 18) - k * 2;
           const x0 = cx + Math.sin(rad(s.dir - span)) * r, y0 = cy - Math.cos(rad(s.dir - span)) * r, x1 = cx + Math.sin(rad(s.dir + span)) * r, y1 = cy - Math.cos(rad(s.dir + span)) * r;
-          out.push(`<path class="m-swell-stroke ${s.cls}${blocked}" style="stroke-width:${F(w)};opacity:${(1 - k * 0.2).toFixed(2)}" d="M${F(x0)} ${F(y0)}A${r} ${r} 0 0 1 ${F(x1)} ${F(y1)}"/>`);
+          out.push(`<path class="m-swell-stroke ${s.cls}" style="stroke-width:${F(w)};opacity:${(1 - k * 0.2).toFixed(2)}" d="M${F(x0)} ${F(y0)}A${r} ${r} 0 0 1 ${F(x1)} ${F(y1)}"/>`);
         }
         const r = base + 4 * gap + 10;
         label(cx + ux * r, cy + uy * r, `${s.name} ${fx(s.h)} m`, anchorFor(s.dir));
@@ -284,7 +283,7 @@ export function conditionOverlay(map: MlMap, lngLat: [number, number]) {
         for (let k = 0; k < 7; k++) {
           const d = 34 + (i * gap) / 2 + k * gap, half = 34 + d * 0.35;
           const mx = cx + ux * d, my = cy + uy * d;
-          out.push(`<path class="m-swell-stroke ${s.cls}${blocked}" style="stroke-width:${F(w)};opacity:${Math.max(0.2, 1 - k * 0.12).toFixed(2)}" d="M${F(mx - nx * half)} ${F(my - ny * half)}L${F(mx + nx * half)} ${F(my + ny * half)}"/>`);
+          out.push(`<path class="m-swell-stroke ${s.cls}" style="stroke-width:${F(w)};opacity:${Math.max(0.2, 1 - k * 0.12).toFixed(2)}" d="M${F(mx - nx * half)} ${F(my - ny * half)}L${F(mx + nx * half)} ${F(my + ny * half)}"/>`);
         }
         const dl = 34 + 7 * gap + 8;
         label(cx + ux * dl, cy + uy * dl, `${s.name} ${fx(s.h)} m`, anchorFor(s.dir));
@@ -318,7 +317,7 @@ export function conditionOverlay(map: MlMap, lngLat: [number, number]) {
   // Map key: same glyphs as the map, with the current numbers.
   function drawLegend() {
     if (!state) return;
-    const rows = state.swells.map((s) => `<div class="ml-row"><span class="ml-glyph">${swellGlyph(mode, s.cls)}</span><span class="ml-name">${s.name}</span><span class="ml-val">${s.h != null && s.h >= 0.1 ? `${fx(s.h)} m, ${fx(s.period, 0)} s, ${compass(s.dir)}${s.blocked ? " <em>blocked</em>" : ""}` : "none"}</span></div>`);
+    const rows = state.swells.map((s) => `<div class="ml-row"><span class="ml-glyph">${swellGlyph(mode, s.cls)}</span><span class="ml-name">${s.name}</span><span class="ml-val">${s.h != null && s.h >= 0.1 ? `${fx(s.h)} m, ${fx(s.period, 0)} s, ${compass(s.dir)}` : "none"}</span></div>`);
     const w = state.wind;
     rows.push(`<div class="ml-row"><span class="ml-glyph">${windLegendGlyph()}</span><span class="ml-name">Wind</span><span class="ml-val">${w?.speed != null ? `${fx(w.speed)} m/s, ${compass(w.dir)}${w.label && w.tone !== "none" ? ` <span class="ml-tone t-${w.tone}">${w.label}</span>` : ""}` : "no data"}</span></div>`);
     legend.innerHTML = `${rows.join("")}<div class="ml-foot">Arrows travel the way the water and air move. Barbs: 10 knots each.</div>`;

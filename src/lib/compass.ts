@@ -3,7 +3,7 @@
 // "this is what hits the beach". Coastline and swell window come from the spot's
 // `faces`. Wind carries barbs (knots) at its upwind end, nautical-chart style.
 
-export type RoseSwell = { dir: number | null; h: number | null; cls: string; blocked?: boolean };
+export type RoseSwell = { dir: number | null; h: number | null; cls: string };
 export type RoseWind = { dir: number | null; speed: number | null } | null;
 /** A text label outside the ring at a bearing, e.g. "Swell 0.9 m · 6 s" by its arrow. */
 export type RoseTag = { dir: number; text: string; cls: string };
@@ -93,7 +93,7 @@ export function renderCompass(el: Element, o: { faces?: number | null; window?: 
   const sw = (o.swells ?? []).filter((x): x is RoseSwell & { dir: number; h: number } => x.dir != null && x.h != null && x.h > 0.05).sort((a, b) => b.h - a.h);
   for (const x of sw) {
     const len = Math.max(22, Math.min(74, 18 + x.h * 32));
-    s.push(`<path class="c-arrow ${x.cls}${x.blocked ? " blocked" : ""}" d="${arrow(x.dir, len, x.cls === "p1" ? 9 : 7)}"/>`);
+    s.push(`<path class="c-arrow ${x.cls}" d="${arrow(x.dir, len, x.cls === "p1" ? 9 : 7)}"/>`);
   }
   if (o.wind?.dir != null) {
     // Same glyph as the map: thin ink line, open chevron head, knot barbs at the upwind end.

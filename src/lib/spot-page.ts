@@ -5,7 +5,7 @@ import { toCsv, downloadText } from "./csv";
 import { fmt, compass } from "./format";
 import { renderCompass } from "./compass";
 import { renderTimeline } from "./timeline";
-import { makeConditions, roseSwells, swellNote, timelineRows, type WindSeries } from "./conditions";
+import { makeConditions, roseSwells, timelineRows, type WindSeries } from "./conditions";
 import { lazyOverlay } from "./lazy-map";
 import { PARTS, esc, legendHtml, slots, swIcon, tideAt, windChip, windIcon, windKey } from "./ui";
 import { HOUR as H, at, exposureText, facesDeg, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile, type SwellWindow } from "./surf";
@@ -81,7 +81,6 @@ export async function initSpot(built: Built) {
   const lastObs = obs ? obs.t.findLast((_, i) => obsHs[i] != null) ?? null : null;
 
   const conditions = makeConditions(sea, wind, faces, s.swell);
-  const note = swellNote;
 
   function show(tsIn: number | null) {
     const ts = tsIn ?? Math.round(now / H) * H;
@@ -96,7 +95,6 @@ export async function initSpot(built: Built) {
       R.text("ms-hs", fmt(at(obs.t, obsHs, bt, 2 * H)));
       R.text("ms-src", past ? `${buoyName} buoy, ${hhmm(bt)}` : `${buoyName}, latest ${hhmm(bt)}`);
     } else { R.text("ms-hs", "–"); R.text("ms-src", "No working buoy nearby"); }
-    R.text("note", note(parts));
     parts.forEach((x, i) => {
       const some = x.h != null && x.h >= 0.1;
       R.text(`sw${i + 1}`, some ? `${fmt(x.h)} m at ${fmt(x.period, 0)} s from ${compass(x.dir)}` : "None to speak of");
@@ -121,7 +119,7 @@ export async function initSpot(built: Built) {
     el.innerHTML = `<div class="tip-rose"></div><div>
       <div class="tip-line">${whenLabel(ts)}</div>
       <div class="tip-hs">${fmt(hs)}<small>m</small></div>
-      <div class="tip-line">${swIcon("p1")}Swell ${fmt(p1.h)} m, ${fmt(p1.period, 0)} s, ${compass(p1.dir)}${p1.blocked ? " (blocked)" : ""}</div>
+      <div class="tip-line">${swIcon("p1")}Swell ${fmt(p1.h)} m, ${fmt(p1.period, 0)} s, ${compass(p1.dir)}</div>
       <div class="tip-line">${windIcon}${windChip(w)}</div>
     </div>`;
     renderCompass(el.firstElementChild!, { faces, window: s.swell, swells: roseSwells(parts), wind: w, label: "" });

@@ -263,7 +263,6 @@ header.site nav a[aria-current="page"] { color: var(--ink); border-bottom-color:
 .m-swell-stroke.p2, .m-swell-stroke.p2 path { stroke: var(--p2); }
 .m-swell-stroke.obs { stroke: var(--obs); }
 .m-swell-stroke path { fill: none; stroke-width: 2.4; stroke-linecap: round; }
-.m-swell.blocked, .m-swell-stroke.blocked { opacity: 0.3 !important; }
 .m-wind { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .m-wind-casing { fill: none; stroke: var(--map-land); stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; opacity: 0.9; }
 .m-wind.streak { stroke-width: 1.4; opacity: 0.5; }
@@ -322,7 +321,6 @@ header.site nav a[aria-current="page"] { color: var(--ink); border-bottom-color:
 .ro-ms .ro-unit { font-size: 1.1rem; }
 .ro-ms .ro-big { padding-top: 1.4rem; }
 .ro-src { margin: 2px 0 0; font-size: 0.74rem; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ro-note { height: 1.5em; margin: 6px 0 6px; font-size: 0.84rem; font-weight: 600; color: var(--poor); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ro-list { margin: 0; border-top: 1.5px solid var(--ink); }
 .ro-item { display: grid; grid-template-columns: 7.4em minmax(0, 1fr); gap: 8px; height: 46px; align-content: center; border-bottom: 1px solid var(--rule); font-size: 0.88rem; }
 .ro-item dt { color: var(--ink-2); display: flex; align-items: center; white-space: nowrap; }
@@ -353,7 +351,6 @@ header.site nav a[aria-current="page"] { color: var(--ink); border-bottom-color:
 .c-arrow.p1 { fill: var(--p1); }
 .c-arrow.p2 { fill: var(--p2); }
 .c-arrow.obs { fill: var(--ink-3); }
-.c-arrow.blocked, .m-crest.blocked, .m-crest-arrow.blocked { opacity: 0.3 !important; }
 .c-wind line, .c-wind path { stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .c-wind-casing { fill: none; stroke: var(--rose-face); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
 .c-hub { fill: var(--ink); }
