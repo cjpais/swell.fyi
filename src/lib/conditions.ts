@@ -1,7 +1,7 @@
 // Conditions at a spot at one moment, shared by the spot page and the explore map, so both
 // read the same numbers from the same series.
 import { PARTS } from "./ui";
-import { HOUR as H, at, swellExposure, windState, type ObsTable, type Tide } from "./surf";
+import { HOUR as H, at, swellExposure, windState, type ObsTable, type SwellWindow, type Tide } from "./surf";
 import type { Row } from "./timeline";
 
 /** Hourly sea state with swell partitions (MFWAM, or GFS-Wave as fallback). */
@@ -9,11 +9,12 @@ export type SeaSeries = { label: string; time: number[]; get: (variable: string)
 /** Hourly 10 m wind at the beach. */
 export type WindSeries = { time: number[]; wind_speed_10m: (number | null)[]; wind_direction_10m: (number | null)[]; wind_gusts_10m: (number | null)[] };
 
-export function makeConditions(sea: SeaSeries | null, wind: WindSeries | null, faces: number | null) {
+/** `window`: the spot's own swell directions; without it, exposure is judged from `faces` alone. */
+export function makeConditions(sea: SeaSeries | null, wind: WindSeries | null, faces: number | null, window?: SwellWindow | null) {
   return (ts: number) => {
     const parts = PARTS.map((pt) => {
       const h = sea ? at(sea.time, sea.get(`${pt.key}_height`), ts) : null, dir = sea ? at(sea.time, sea.get(`${pt.key}_direction`), ts) : null;
-      const exposure = swellExposure(dir, faces);
+      const exposure = swellExposure(dir, faces, window);
       return { ...pt, h, dir, period: sea ? at(sea.time, sea.get(`${pt.key}_period`), ts) : null, exposure, blocked: exposure === "blocked" };
     });
     let w = null;

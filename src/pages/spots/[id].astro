@@ -1,10 +1,11 @@
 ---
 import Base from "../../layouts/Base.astro";
 import { SPOTS, type Spot } from "../../data/spots";
-import { stationList } from "../../lib/local";
+import { stationList, isWaveStation } from "../../lib/local";
 import { km } from "../../lib/openmeteo";
 import { readoutShell, swIcon, windIcon, glyphKey } from "../../lib/ui";
-import { cleanName, compassWord, facesDeg } from "../../lib/surf";
+import { cleanName, compassWord } from "../../lib/surf";
+import { getEntry, render } from "astro:content";
 
 export function getStaticPaths() {
   return SPOTS.map((spot) => ({ params: { id: spot.id }, props: { spot } }));
@@ -20,7 +21,8 @@ const buoys = spot.buoys
   .filter((s) => s != null)
   .map((s) => ({
     id: s.id,
-    name: cleanName(s.nameEn),
+    // A tide gauge often shares its name with the wave buoy offshore; say which it is.
+    name: isWaveStation(s) ? cleanName(s.nameEn) : `${cleanName(s.nameEn)} tide gauge`,
     zh: s.name,
     lat: s.lat,
     lon: s.lon,
@@ -28,16 +30,20 @@ const buoys = spot.buoys
   }));
 
 const payload = { spot, buoys };
+// The spot's own words (spots/{id}.md, below its front matter).
+const entry = await getEntry("spots", spot.id);
+const About = entry ? (await render(entry)).Content : null;
+const { best, works } = spot.swell;
 ---
 <Base title={spot.name} description={`Wave forecast and buoy data for ${spot.name} (${spot.nameZh}), Taiwan.`}>
   <p class="crumb"><a href="/">Now</a> / {spot.region}</p>
   <section class="detail-head">
     <h1 class="headline"><span class="en">{spot.name}</span> <span class="zh" lang="zh-Hant">{spot.nameZh}</span></h1>
     <p class="facts">
-      The beach faces {compassWord(facesDeg(spot.faces))}.
+      Faces {compassWord(spot.faces)}. Takes swell from {compassWord(works[0])} round to {compassWord(works[1])}, best from {compassWord(best[0])} to {compassWord(best[1])}.
       <span id="buoys">{buoys.length > 0 && <> Nearby buoys: {buoys.map((b, i) => <>{i > 0 && ", "}<a href={`/buoys/${b.id}/`}>{b.name}</a></>)}.</>}</span>
-      {spot.notes && <> {spot.notes}</>}
     </p>
+    {About && <div class="about"><About /></div>}
   </section>
 
   <section class="detail-now">
@@ -46,7 +52,7 @@ const payload = { spot, buoys };
     })} />
     <figure class="rose-frame">
       <div class="rose" id="rose"></div>
-      <figcaption><Fragment set:html={glyphKey} /><span>Shaded: directions swell can reach this beach from.</span></figcaption>
+      <figcaption><Fragment set:html={glyphKey} /><span>Shaded: the swell directions this spot takes, darker where it's best.</span></figcaption>
     </figure>
     <figure class="map-frame detail-map"><div id="map" class="map" aria-label={`Map of ${spot.name} with swell and wind`}></div></figure>
   </section>

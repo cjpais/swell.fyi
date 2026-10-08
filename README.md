@@ -3,7 +3,7 @@
 A no-nonsense explorer for Taiwan's open ocean data, built for surfing. It shows:
 
 - **Buoy truth.** Hourly observations from every CWA marine station: wave height, period, direction, wind, water temperature, tide and current. History is archived locally, so it grows beyond the 30 days CWA keeps.
-- **CWA's own surf forecast.** M-B0078-001 (WW3-based, 72 h, 3-hourly) for 13 named surf spots plus beaches and harbours.
+- **CWA's own surf forecast.** M-B0078-001 (WW3-based, 72 h, 3-hourly) for its named surf spots, beaches and harbours.
 - **Three global wave models side by side**, via Open-Meteo: Météo-France MFWAM, NOAA GFS-Wave and ECMWF WAM. Swell partitions come from MFWAM and GFS.
 - **Four wind forecasts per spot:** ECMWF IFS and GFS via Open-Meteo, and CWA's own regional WRF at 3 km (M-A0064) and 15 km (M-A0061), 6-hourly to 84 h.
 - **Model scoring.** Each buoy page computes every model's bias, RMSE and correlation against the buoy, so you can see which source to trust where.
@@ -137,7 +137,8 @@ A key also unlocks the REST datastore, which filters by station, element and tim
 | `data/archive/cwa-recreation-forecast/{point}.csv` | Every CWA forecast issue for the spot points, with lead time, for scoring CWA later |
 | `public/data/` | Local snapshot for offline work (`PUBLIC_DATA_BASE=/data`): generated, safe to delete and re-fetch |
 | `src/lib/data.ts` | Where the browser loads live data from, and its types |
-| `src/data/spots.ts` | Surf spots: coordinates, CWA forecast point, reference buoys. Add spots here |
+| `spots/*.md` | Surf spots, one file each: where the break is, which way it faces, the swell directions it takes, its CWA forecast point and buoys, and a few written lines. Add and edit spots here; see `spots/README.md` |
+| `src/data/spots.ts` | Loads `spots.json`, which `bun run spots` writes from `spots/*.md` (the build and `deploy:data` run it first) |
 | `src/lib/openmeteo.ts` | Model list and Open-Meteo requests |
 | `src/lib/map.ts` | MapLibre map: Protomaps style, depth layers, markers |
 | `scripts/tiles.sh`, `scripts/tiles-upload.sh`, `scripts/bathymetry.py` | Build/upload the basemap and the depth contours |

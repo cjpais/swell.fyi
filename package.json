@@ -7,9 +7,10 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "bun scripts/spots.ts && astro build",
     "preview": "astro preview",
     "astro": "astro",
+    "spots": "bun scripts/spots.ts",
     "fetch": "bun scripts/fetch-cwa.ts",
     "fetch:backfill": "bun scripts/fetch-cwa.ts --backfill",
     "fetch:field": "bun scripts/fetch-field.ts",
@@ -20,7 +21,7 @@
     "bathymetry": "uv run scripts/bathymetry.py",
     "tiles:upload": "bash scripts/tiles-upload.sh",
     "deploy:tiles": "wrangler deploy -c workers/tiles/wrangler.jsonc",
-    "deploy:data": "wrangler deploy -c workers/data/wrangler.jsonc"
+    "deploy:data": "bun scripts/spots.ts && wrangler deploy -c workers/data/wrangler.jsonc"
   },
   "dependencies": {
     "@protomaps/basemaps": "^5.7.2",

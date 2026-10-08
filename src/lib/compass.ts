@@ -56,11 +56,18 @@ function barbs(bearing: number, ms: number) {
   return out;
 }
 
-export function renderCompass(el: Element, o: { faces?: number | null; swells?: RoseSwell[]; wind?: RoseWind; label?: string; tags?: RoseTag[] }) {
+/** A spot's swell directions, clockwise [from, to]: the shaded window, with `best` darker. */
+export type RoseWindow = { best: [number, number]; works: [number, number] } | null;
+
+export function renderCompass(el: Element, o: { faces?: number | null; window?: RoseWindow; swells?: RoseSwell[]; wind?: RoseWind; label?: string; tags?: RoseTag[] }) {
   const s: string[] = [];
   const css = getComputedStyle(document.documentElement);
   s.push(`<circle class="c-face" r="${R}"/>`);
-  if (o.faces != null) {
+  // The spot's own window if it has one, else everything the beach faces, strongest straight in.
+  if (o.window) {
+    s.push(`<path class="c-window" d="${sector(o.window.works[0], o.window.works[1], R)}"/>`);
+    s.push(`<path class="c-window-core" d="${sector(o.window.best[0], o.window.best[1], R)}"/>`);
+  } else if (o.faces != null) {
     s.push(`<path class="c-window" d="${sector(o.faces - 90, o.faces + 90, R)}"/>`);
     s.push(`<path class="c-window-core" d="${sector(o.faces - 40, o.faces + 40, R)}"/>`);
   }

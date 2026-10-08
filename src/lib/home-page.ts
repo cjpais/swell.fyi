@@ -10,7 +10,7 @@ import { HOUR as H, at, facesDeg, windState, nowS, type Tone } from "./surf";
 import { isFresh, loadPage, type HomePageData } from "./data";
 
 type Payload = {
-  spots: { id: string; name: string; lat: number; lon: number; faces: string; cwaPoint: string }[];
+  spots: { id: string; name: string; lat: number; lon: number; faces: number; cwaPoint: string }[];
   stations: { id: string; name: string; lat: number; lon: number }[];
   east: string[];
 };

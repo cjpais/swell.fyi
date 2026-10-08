@@ -9,7 +9,7 @@ import { SPOTS, REGIONS } from "../../data/spots";
 import { cleanName } from "../../lib/surf";
 
 const stations = await stationList();
-const spots = SPOTS.map((s) => ({ id: s.id, name: s.name, nameZh: s.nameZh, region: s.region, lat: s.lat, lon: s.lon, faces: s.faces }));
+const spots = SPOTS.map((s) => ({ id: s.id, name: s.name, nameZh: s.nameZh, region: s.region, lat: s.lat, lon: s.lon, faces: s.faces, swell: s.swell }));
 const buoys = stations.filter(isWaveStation).map((s) => ({ id: s.id, name: cleanName(s.nameEn), lat: s.lat, lon: s.lon }));
 const short = (n: string) => n.replace(/ \(.*\)$/, "");
 ---

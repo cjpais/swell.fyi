@@ -10,7 +10,7 @@ import { HOUR, at, facesDeg, fetchSpotWind, nowS, obsTable, whenLabel, windState
 import { cwaUrl, getCwa, loadPage, loadStations, type BuoyPageData } from "./data";
 import type { SeaSeries, WindSeries } from "./conditions";
 
-type Payload = { id: string; name: string; lat: number; lon: number; wave: boolean; spots: { id: string; name: string; lat: number; lon: number; faces: string }[] };
+type Payload = { id: string; name: string; lat: number; lon: number; wave: boolean; spots: { id: string; name: string; lat: number; lon: number; faces: number }[] };
 type Obs = { columns: string[]; rows: (string | number | null)[][] };
 type Latest = NonNullable<BuoyPageData["latest"]>;
 /** The hero's wind when the buoy has no anemometer: ECMWF IFS at the buoy, with sunrise/sunset. */

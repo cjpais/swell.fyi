@@ -8,12 +8,12 @@ import { renderTimeline } from "./timeline";
 import { makeConditions, roseSwells, swellNote, timelineRows, type WindSeries } from "./conditions";
 import { lazyOverlay } from "./lazy-map";
 import { PARTS, esc, legendHtml, slots, swIcon, tideAt, windChip, windIcon, windKey } from "./ui";
-import { HOUR as H, at, facesDeg, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile } from "./surf";
+import { HOUR as H, at, exposureText, facesDeg, hhmm, nowS, obsTable, tideSeries, whenLabel, type ObsFile, type SwellWindow } from "./surf";
 import { DATA, cwaUrl, getCwa, loadPage, type SpotPageData } from "./data";
 import { FIELD_STALE_H } from "./field";
 
 type BuoyRef = { id: string; name: string; zh: string; lat: number; lon: number; km: number };
-type Built = { spot: { id: string; name: string; lat: number; lon: number; model: [number, number]; faces: string; cwaPoint: string }; buoys: BuoyRef[] };
+type Built = { spot: { id: string; name: string; lat: number; lon: number; model: [number, number]; faces: number; swell: SwellWindow; cwaPoint: string }; buoys: BuoyRef[] };
 type Payload = {
   spot: Built["spot"];
   cwa: SpotPageData["cwa"];
@@ -80,7 +80,7 @@ export async function initSpot(built: Built) {
   const obsHs = obs?.col("wave_height_m") ?? [];
   const lastObs = obs ? obs.t.findLast((_, i) => obsHs[i] != null) ?? null : null;
 
-  const conditions = makeConditions(sea, wind, faces);
+  const conditions = makeConditions(sea, wind, faces, s.swell);
   const note = swellNote;
 
   function show(tsIn: number | null) {
@@ -100,7 +100,7 @@ export async function initSpot(built: Built) {
     parts.forEach((x, i) => {
       const some = x.h != null && x.h >= 0.1;
       R.text(`sw${i + 1}`, some ? `${fmt(x.h)} m at ${fmt(x.period, 0)} s from ${compass(x.dir)}` : "None to speak of");
-      R.text(`sw${i + 1}-sub`, some ? (x.blocked ? "Blocked by the coast" : x.exposure[0].toUpperCase() + x.exposure.slice(1)) : "");
+      R.text(`sw${i + 1}-sub`, some ? exposureText(x.exposure) : "");
     });
     R.html("wind", windChip(w));
     R.text("wind-sub", w?.gust != null ? `Gusts ${fmt(w.gust)} m/s, ECMWF model` : "");
@@ -110,7 +110,7 @@ export async function initSpot(built: Built) {
     const wm = sst ? at(sst.time, sst.v, ts) : null;
     R.text("water", wt != null ? `${fmt(wt)} °C` : wm != null ? `${fmt(wm)} °C` : "–");
     R.text("water-sub", wt != null ? `Measured at ${buoyName} buoy` : wm != null ? "Sea surface, model" : "");
-    renderCompass($("rose"), { faces, swells: roseSwells(parts), wind: w, label: `Swell from ${compass(parts[0].dir)}, wind from ${compass(w?.dir)}` });
+    renderCompass($("rose"), { faces, window: s.swell, swells: roseSwells(parts), wind: w, label: `Swell from ${compass(parts[0].dir)}, wind from ${compass(w?.dir)}` });
     overlay.update({ faces, swells: roseSwells(parts), wind: w });
   }
   show(null);
@@ -124,7 +124,7 @@ export async function initSpot(built: Built) {
       <div class="tip-line">${swIcon("p1")}Swell ${fmt(p1.h)} m, ${fmt(p1.period, 0)} s, ${compass(p1.dir)}${p1.blocked ? " (blocked)" : ""}</div>
       <div class="tip-line">${windIcon}${windChip(w)}</div>
     </div>`;
-    renderCompass(el.firstElementChild!, { faces, swells: roseSwells(parts), wind: w, label: "" });
+    renderCompass(el.firstElementChild!, { faces, window: s.swell, swells: roseSwells(parts), wind: w, label: "" });
   }
 
   $("legend").innerHTML = legendHtml([

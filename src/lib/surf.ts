@@ -43,8 +43,9 @@ const C16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW",
 const WORDS: Record<string, string> = { N: "north", NNE: "north-northeast", NE: "northeast", ENE: "east-northeast", E: "east", ESE: "east-southeast", SE: "southeast", SSE: "south-southeast", S: "south", SSW: "south-southwest", SW: "southwest", WSW: "west-southwest", W: "west", WNW: "west-northwest", NW: "northwest", NNW: "north-northwest" };
 export const compassWord = (d: number | null | undefined) => (d == null ? "–" : WORDS[compass(d)]);
 
-/** "E/SE" → 112.5 (circular mean of the parts). */
-export function facesDeg(faces: string) {
+/** A spot's facing in degrees. Spots store degrees; "E/SE" → 112.5 (circular mean) is still read. */
+export function facesDeg(faces: number | string) {
+  if (typeof faces === "number") return ((faces % 360) + 360) % 360;
   const ds = faces.split("/").map((s) => C16.indexOf(s.trim()) * 22.5).filter((d) => d >= 0);
   const x = ds.reduce((a, d) => a + Math.cos((d * Math.PI) / 180), 0), y = ds.reduce((a, d) => a + Math.sin((d * Math.PI) / 180), 0);
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
@@ -71,15 +72,28 @@ export function windState(from: number | null | undefined, speed: number | null 
   return { label: "Onshore", tone: "poor" };
 }
 
-/** How directly a swell (from) reaches a beach (faces). */
-export function swellExposure(from: number | null | undefined, faces: number | null) {
+/** Is bearing d inside the clockwise range [a, b]? [330, 30] holds 350 and 10. */
+export const within = (d: number, [a, b]: [number, number]) => (((d - a) % 360) + 360) % 360 <= (((b - a) % 360) + 360) % 360;
+
+/** Swell directions a spot takes: `best` inside `works`, clockwise [from, to] in degrees. */
+export type SwellWindow = { best: [number, number]; works: [number, number] };
+
+/**
+ * How a swell (from) reaches a spot. With the spot's own swell window: "best", "works" or
+ * "blocked" (outside it). Without one, from the angle off the way the beach faces.
+ */
+export function swellExposure(from: number | null | undefined, faces: number | null, window?: SwellWindow | null) {
   if (from == null || faces == null) return "";
+  if (window) return within(from, window.best) ? "best" : within(from, window.works) ? "works" : "blocked";
   const d = angDiff(from, faces);
   if (d <= 35) return "straight in";
   if (d <= 70) return "angled in";
   if (d <= 95) return "wrapping";
   return "blocked";
 }
+const EXPOSURE: Record<string, string> = { best: "From its best direction", works: "From a direction it works in", blocked: "Blocked here", "straight in": "Straight in", "angled in": "Angled in", wrapping: "Wrapping in" };
+/** The exposure in words, for a readout. */
+export const exposureText = (e: string) => EXPOSURE[e] ?? "";
 
 // ---------- tide ----------
 

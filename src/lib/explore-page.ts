@@ -10,10 +10,10 @@ import { renderCompass, type RoseTag } from "./compass";
 import { forecastStrip, type Readout } from "./forecast-strip";
 import { slots, tideAt } from "./ui";
 import { fmt, compass } from "./format";
-import { HOUR as H, facesDeg, hhmm, nowS, tideSeries, whenLabel, type Tide } from "./surf";
+import { HOUR as H, facesDeg, hhmm, nowS, tideSeries, whenLabel, type SwellWindow, type Tide } from "./surf";
 import { isFresh, loadSpotTides, loadStations, type LiveStation, type SpotTide } from "./data";
 
-type SpotP = { id: string; name: string; nameZh: string; region: string; lat: number; lon: number; faces: string };
+type SpotP = { id: string; name: string; nameZh: string; region: string; lat: number; lon: number; faces: number; swell: SwellWindow };
 type Payload = {
   spots: SpotP[];
   buoys: { id: string; name: string; lat: number; lon: number }[];
@@ -75,7 +75,7 @@ export async function initExplore(root: HTMLElement, p: Payload) {
     const wind: WindSeries = f.wind;
     return { sea, wind, sst: f.sst };
   };
-  const conds = new Map(p.spots.map((s) => { const x = series(s.id); return [s.id, makeConditions(x.sea, x.wind, facesDeg(s.faces))]; }));
+  const conds = new Map(p.spots.map((s) => { const x = series(s.id); return [s.id, makeConditions(x.sea, x.wind, facesDeg(s.faces), s.swell)]; }));
 
   // ---------- state ----------
   let sel: SpotP | null = null, tide: Tide | null = null;
@@ -184,7 +184,8 @@ export async function initExplore(root: HTMLElement, p: Payload) {
     c.parts.forEach((x) => { if (x.dir != null && x.h != null && x.h >= 0.1) tags.push({ dir: x.dir, cls: x.cls, text: `${x.name} ${fmt(x.h)} m · ${fmt(x.period, 0)} s` }); });
     if (c.w?.dir != null) tags.push({ dir: c.w.dir, cls: "wind", text: `Wind ${fmt(c.w.speed, 0)} m/s` });
     // No coastline or swell window yet: each spot's bounds still need picking by hand.
-    renderCompass(rose, { swells: c.parts.map((x) => ({ dir: x.dir, h: x.h, cls: x.cls })), wind: c.w, tags, label: "" });
+    // The spot's swell window on the rose; the map underneath already shows the coast.
+    renderCompass(rose, { faces: facesDeg(sel.faces), window: sel.swell, swells: c.parts.map((x) => ({ dir: x.dir, h: x.h, cls: x.cls, blocked: x.blocked })), wind: c.w, tags, label: "" });
     placeRose();
   }
 

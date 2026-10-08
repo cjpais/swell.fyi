@@ -1,0 +1,342 @@
+[
+  {
+    "id": "zhongjiao",
+    "name": "Zhongjiao Bay",
+    "nameZh": "中角沙珠灣",
+    "region": "North coast",
+    "lat": 25.24,
+    "lon": 121.636,
+    "faces": 55,
+    "swell": {
+      "best": [
+        10,
+        80
+      ],
+      "works": [
+        330,
+        110
+      ]
+    },
+    "model": [
+      25.266,
+      121.677
+    ],
+    "cwaPoint": "O00100",
+    "buoys": [
+      "C6AH2",
+      "OAC004"
+    ]
+  },
+  {
+    "id": "fulong",
+    "name": "Fulong",
+    "nameZh": "福隆",
+    "region": "North coast",
+    "lat": 25.024,
+    "lon": 121.95,
+    "faces": 35,
+    "swell": {
+      "best": [
+        0,
+        60
+      ],
+      "works": [
+        320,
+        85
+      ]
+    },
+    "model": [
+      25.061,
+      121.978
+    ],
+    "cwaPoint": "O00300",
+    "buoys": [
+      "46694A",
+      "OAC003",
+      "C4A05"
+    ]
+  },
+  {
+    "id": "wushi-north",
+    "name": "Wushi North",
+    "nameZh": "烏石港北堤",
+    "region": "Yilan",
+    "lat": 24.8696289,
+    "lon": 121.8413086,
+    "faces": 105,
+    "swell": {
+      "best": [
+        60,
+        115
+      ],
+      "works": [
+        20,
+        120
+      ]
+    },
+    "model": [
+      24.858,
+      121.889
+    ],
+    "cwaPoint": "O00400",
+    "buoys": [
+      "46708A",
+      "OAC005",
+      "C4U02"
+    ]
+  },
+  {
+    "id": "wushi-south",
+    "name": "Wushi South",
+    "nameZh": "烏石港南堤",
+    "region": "Yilan",
+    "lat": 24.8647211,
+    "lon": 121.8401198,
+    "faces": 128,
+    "swell": {
+      "best": [
+        135,
+        175
+      ],
+      "works": [
+        100,
+        200
+      ]
+    },
+    "model": [
+      24.837,
+      121.879
+    ],
+    "cwaPoint": "O00400",
+    "buoys": [
+      "46708A",
+      "OAC005",
+      "C4U02"
+    ]
+  },
+  {
+    "id": "beibin",
+    "name": "Beibin",
+    "nameZh": "北濱",
+    "region": "Hualien",
+    "lat": 23.9777253,
+    "lon": 121.620764,
+    "faces": 158,
+    "swell": {
+      "best": [
+        140,
+        175
+      ],
+      "works": [
+        128,
+        215
+      ]
+    },
+    "model": [
+      23.936,
+      121.639
+    ],
+    "cwaPoint": "I06100",
+    "buoys": [
+      "46699A",
+      "C4T01"
+    ]
+  },
+  {
+    "id": "chenggong",
+    "name": "Chenggong",
+    "nameZh": "成功",
+    "region": "Taitung",
+    "lat": 23.0963773,
+    "lon": 121.3703013,
+    "faces": 175,
+    "swell": {
+      "best": [
+        130,
+        190
+      ],
+      "works": [
+        80,
+        230
+      ]
+    },
+    "model": [
+      23.052,
+      121.375
+    ],
+    "cwaPoint": "I01000",
+    "buoys": [
+      "46761F",
+      "C4S02"
+    ]
+  },
+  {
+    "id": "donghe",
+    "name": "Donghe River Mouth",
+    "nameZh": "東河",
+    "region": "Taitung",
+    "lat": 22.9750085,
+    "lon": 121.3126403,
+    "faces": 120,
+    "swell": {
+      "best": [
+        80,
+        150
+      ],
+      "works": [
+        35,
+        210
+      ]
+    },
+    "model": [
+      22.953,
+      121.355
+    ],
+    "cwaPoint": "O01300",
+    "buoys": [
+      "46761F",
+      "WRA007"
+    ]
+  },
+  {
+    "id": "jinzun",
+    "name": "Jinzun",
+    "nameZh": "金樽",
+    "region": "Taitung",
+    "lat": 22.956,
+    "lon": 121.295,
+    "faces": 140,
+    "swell": {
+      "best": [
+        90,
+        160
+      ],
+      "works": [
+        40,
+        210
+      ]
+    },
+    "model": [
+      22.922,
+      121.326
+    ],
+    "cwaPoint": "O01300",
+    "buoys": [
+      "46761F",
+      "WRA007"
+    ]
+  },
+  {
+    "id": "jialeshui",
+    "name": "Jialeshui",
+    "nameZh": "佳樂水",
+    "region": "Kenting / Pingtung",
+    "lat": 21.9872194,
+    "lon": 120.8474887,
+    "faces": 120,
+    "swell": {
+      "best": [
+        80,
+        150
+      ],
+      "works": [
+        40,
+        195
+      ]
+    },
+    "model": [
+      21.965,
+      120.889
+    ],
+    "cwaPoint": "O01000",
+    "buoys": [
+      "46759A",
+      "OAC007"
+    ]
+  },
+  {
+    "id": "nanwan",
+    "name": "Nanwan",
+    "nameZh": "南灣",
+    "region": "Kenting / Pingtung",
+    "lat": 21.959,
+    "lon": 120.761,
+    "faces": 180,
+    "swell": {
+      "best": [
+        155,
+        205
+      ],
+      "works": [
+        125,
+        230
+      ]
+    },
+    "model": [
+      21.914,
+      120.761
+    ],
+    "cwaPoint": "O00700",
+    "buoys": [
+      "OAC007",
+      "46759A",
+      "C4Q03"
+    ]
+  },
+  {
+    "id": "baisha",
+    "name": "Baisha",
+    "nameZh": "白砂",
+    "region": "Kenting / Pingtung",
+    "lat": 21.933,
+    "lon": 120.719,
+    "faces": 230,
+    "swell": {
+      "best": [
+        210,
+        260
+      ],
+      "works": [
+        185,
+        300
+      ]
+    },
+    "model": [
+      21.904,
+      120.682
+    ],
+    "cwaPoint": "O00600",
+    "buoys": [
+      "OAC007",
+      "46759A"
+    ]
+  },
+  {
+    "id": "shanshui",
+    "name": "Shanshui (Penghu)",
+    "nameZh": "山水",
+    "region": "West & islands",
+    "lat": 23.513,
+    "lon": 119.591,
+    "faces": 182,
+    "swell": {
+      "best": [
+        150,
+        215
+      ],
+      "works": [
+        100,
+        255
+      ]
+    },
+    "model": [
+      23.468,
+      119.589
+    ],
+    "cwaPoint": "O01100",
+    "buoys": [
+      "46735A",
+      "C6W10"
+    ]
+  }
+]

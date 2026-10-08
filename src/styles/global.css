@@ -297,6 +297,8 @@ header.site nav a[aria-current="page"] { color: var(--ink); border-bottom-color:
 /* ---------- detail pages ---------- */
 .crumb { margin: 24px 0 8px; font-size: 0.85rem; color: var(--ink-3); }
 .detail-head .facts { margin: 10px 0 0; color: var(--ink-2); }
+.detail-head .about { margin-top: 10px; max-width: 70ch; color: var(--ink); }
+.detail-head .about p { margin: 0 0 8px; }
 .buoy-pick { display: inline-flex; gap: 8px; align-items: center; margin-top: 12px; font-size: 0.85rem; color: var(--ink-3); }
 .buoy-pick select { font: inherit; color: var(--ink); background: var(--surface); border: 1.5px solid var(--ink); padding: 4px 6px; }
 .detail-now {
@@ -533,6 +535,7 @@ body.full header.site { flex: none; z-index: 10; }
 .ex-rose svg { position: absolute; left: -130px; top: -130px; width: 260px; height: 260px; overflow: visible; }
 .ex-rose .c-face { fill: var(--surface); fill-opacity: 0.45; }
 .ex-rose .c-hub { display: none; }
+.ex-rose :is(.c-land, .c-coast) { display: none; } /* the map shows the real coast */
 .ex-rose .c-arrow { stroke: var(--map-land); }
 .ex-rose .c-wind-casing { stroke: var(--map-land); }
 .c-tag { font: 700 10.5px var(--font-body), var(--font-zh), sans-serif; fill: var(--ink); paint-order: stroke; stroke: var(--map-land); stroke-width: 3.5px; stroke-linejoin: round; }
